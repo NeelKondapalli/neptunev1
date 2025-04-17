@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Space_Grotesk } from "next/font/google"
 import "@/styles/globals.css"
+import { Toaster } from "@/components/ui/sonner"
 
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"] })
 
@@ -18,7 +19,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={spaceGrotesk.className}>{children}</body>
+      <body className={spaceGrotesk.className}>
+        <main>{children}</main>
+        <Toaster />
+      </body>
     </html>
   )
 }
+
