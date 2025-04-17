@@ -4,6 +4,15 @@ import { useEffect, useRef } from "react"
 import Link from "next/link"
 import { ArrowDown } from 'lucide-react'
 
+type Particle = {
+  x: number
+  y: number
+  radius: number
+  color: string
+  velocity: { x: number; y: number }
+  alpha: number
+}
+
 export function Hero() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -11,20 +20,17 @@ export function Hero() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
+    const context = canvas.getContext("2d")
+    if (!context) return
 
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
+    // After null checks, we can safely assert these won't be null
+    const safeCanvas = canvas as HTMLCanvasElement
+    const safeContext = context as CanvasRenderingContext2D
 
-    const particles: {
-      x: number
-      y: number
-      radius: number
-      color: string
-      velocity: { x: number; y: number }
-      alpha: number
-    }[] = []
+    safeCanvas.width = window.innerWidth
+    safeCanvas.height = window.innerHeight
+
+    const particles: Particle[] = []
 
     const colors = [
       "oklch(0.75 0.2 295)",
@@ -35,11 +41,14 @@ export function Hero() {
 
     for (let i = 0; i < 50; i++) {
       const radius = Math.random() * 2 + 1
+      const color = colors[Math.floor(Math.random() * colors.length)]
+      if (!color) continue // Skip if color is undefined (shouldn't happen)
+      
       particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
+        x: Math.random() * safeCanvas.width,
+        y: Math.random() * safeCanvas.height,
         radius,
-        color: colors[Math.floor(Math.random() * colors.length)],
+        color,
         velocity: {
           x: (Math.random() - 0.5) * 0.5,
           y: (Math.random() - 0.5) * 0.5,
@@ -48,61 +57,65 @@ export function Hero() {
       })
     }
 
+    let animationFrameId: number
+
     function animate() {
-      requestAnimationFrame(animate)
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      animationFrameId = requestAnimationFrame(animate)
+      safeContext.clearRect(0, 0, safeCanvas.width, safeCanvas.height)
 
       particles.forEach((particle) => {
         particle.x += particle.velocity.x
         particle.y += particle.velocity.y
 
-        if (particle.x < 0 || particle.x > canvas.width) {
+        if (particle.x < 0 || particle.x > safeCanvas.width) {
           particle.velocity.x = -particle.velocity.x
         }
 
-        if (particle.y < 0 || particle.y > canvas.height) {
+        if (particle.y < 0 || particle.y > safeCanvas.height) {
           particle.velocity.y = -particle.velocity.y
         }
 
-        ctx.beginPath()
-        ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2)
-        ctx.fillStyle = particle.color
-        ctx.globalAlpha = particle.alpha
-        ctx.fill()
+        safeContext.beginPath()
+        safeContext.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2)
+        safeContext.fillStyle = particle.color
+        safeContext.globalAlpha = particle.alpha
+        safeContext.fill()
       })
 
       // Draw connections
-      ctx.globalAlpha = 0.2
-      for (let i = 0; i < particles.length; i++) {
-        for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x
-          const dy = particles[i].y - particles[j].y
+      safeContext.globalAlpha = 0.2
+      particles.forEach((particle1, i) => {
+        // Only check particles after this one to avoid duplicate connections
+        particles.slice(i + 1).forEach((particle2) => {
+          const dx = particle1.x - particle2.x
+          const dy = particle1.y - particle2.y
           const distance = Math.sqrt(dx * dx + dy * dy)
 
           if (distance < 150) {
-            ctx.beginPath()
-            ctx.strokeStyle = "oklch(0.7 0.2 295)"
-            ctx.globalAlpha = 0.1 * (1 - distance / 150)
-            ctx.lineWidth = 0.5
-            ctx.moveTo(particles[i].x, particles[i].y)
-            ctx.lineTo(particles[j].x, particles[j].y)
-            ctx.stroke()
+            safeContext.beginPath()
+            safeContext.strokeStyle = "oklch(0.7 0.2 295)"
+            safeContext.globalAlpha = 0.1 * (1 - distance / 150)
+            safeContext.lineWidth = 0.5
+            safeContext.moveTo(particle1.x, particle1.y)
+            safeContext.lineTo(particle2.x, particle2.y)
+            safeContext.stroke()
           }
-        }
-      }
+        })
+      })
     }
 
     animate()
 
     const handleResize = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
+      safeCanvas.width = window.innerWidth
+      safeCanvas.height = window.innerHeight
     }
 
     window.addEventListener("resize", handleResize)
 
     return () => {
       window.removeEventListener("resize", handleResize)
+      cancelAnimationFrame(animationFrameId)
     }
   }, [])
 
