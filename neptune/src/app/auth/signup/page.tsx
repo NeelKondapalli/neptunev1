@@ -8,7 +8,7 @@ export default function SignupPage() {
           <h1 className="text-3xl font-bold tracking-tight text-purple-500">Create an account</h1>
           <p className="mt-2 text-sm text-gray-400">
             Or{" "}
-            <a href="/login" className="font-medium text-purple-400 hover:text-purple-300 transition-colors">
+            <a href="/auth/login" className="font-medium text-purple-400 hover:text-purple-300 transition-colors">
               sign in to your account
             </a>
           </p>

@@ -25,7 +25,7 @@ export default function DashboardLayout({
       }
     };
 
-    checkAuth();
+    void checkAuth();
   }, [router]);
 
   if (loading) {
