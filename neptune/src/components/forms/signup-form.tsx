@@ -13,6 +13,7 @@ import { z } from "zod"
 import { Form, FormField, FormItem, FormLabel, FormControl, FormDescription, FormMessage } from "@/components/ui/form"
 import { createClient } from '@supabase/supabase-js'
 import { toast } from "sonner"
+import { useState } from "react"
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
@@ -28,6 +29,7 @@ const formSchema = z.object({
   
   export function SignupForm() {
     const router = useRouter()
+    const [showEmailAlert, setShowEmailAlert] = useState(false)
     // 1. Define your form.
     const form = useForm<z.infer<typeof formSchema>>({
       resolver: zodResolver(formSchema),
@@ -39,25 +41,34 @@ const formSchema = z.object({
    
     // 2. Define a submit handler.
     async function onSubmit(values: z.infer<typeof formSchema>) {
-      // Do something with the form values.
-      // ✅ This will be type-safe and validated.
-      console.log(values)
-      const { data, error } = await supabase.auth.signUp({
-        email: values.email,
-        password: values.password,
-      })
-      if (error) {
-        console.error(error)
-        if (error.code === 'email_exists') {
-            toast.error("Email already exists")
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: values.email,
+          password: values.password,
+        })
+        
+        if (error) {
+          console.error(error)
+          toast.error(error.message || "An error occurred during signup")
         } else {
-            toast.error(error.message)
+          console.log(data)
+          router.push("/dashboard")
         }
-      } else {
-        console.log(data)
-        router.push("/dashboard")
+      } catch (err) {
+        console.error(err)
+        toast.error("An unexpected error occurred during signup")
       }
     }
+
+    // Handle email validation
+    const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (e.target.value && !emailRegex.test(e.target.value)) {
+        setShowEmailAlert(true);
+      } else {
+        setShowEmailAlert(false);
+      }
+    };
 
     return (
         <Form {...form}>
@@ -69,8 +80,26 @@ const formSchema = z.object({
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="johndoe@example.com" {...field} />
+                    <Input 
+                      placeholder="johndoe@example.com" 
+                      {...field} 
+                      onChange={(e) => {
+                        field.onChange(e);
+                        handleEmailChange(e);
+                      }}
+                    />
                   </FormControl>
+                  {showEmailAlert && (
+                    <Alert 
+                      variant="destructive" 
+                      className="mt-2 p-2 border-red-500/50 text-red-600"
+                    >
+                      <AlertCircle className="h-4 w-4 mr-2" />
+                      <AlertDescription>
+                        Please enter a valid email address (e.g., name@example.com)
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}
@@ -82,7 +111,7 @@ const formSchema = z.object({
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input placeholder="********" {...field} />
+                    <Input type="password" placeholder="********" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

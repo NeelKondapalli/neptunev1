@@ -17,7 +17,7 @@ export function UploadSongForm() {
   const router = useRouter()
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
+    if (e.target.files?.[0]) {
       const selectedFile = e.target.files[0]
       // Check if file is a .wav file
       if (selectedFile.type === "audio/wav") {
@@ -120,7 +120,7 @@ export function UploadSongForm() {
             </div>
           </div>
         </CardContent>
-        <CardFooter>
+        <CardFooter className="mt-6">
           <Button
             type="submit"
             className="w-full bg-purple-600 hover:bg-purple-700 text-white"
