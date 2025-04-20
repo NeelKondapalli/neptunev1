@@ -41,10 +41,10 @@ export function Features() {
       <div ref={featuresRef} className="relative z-10 max-w-6xl mx-auto">
         <div className="text-center mb-16 fade-in-up">
           <h2 className="text-3xl md:text-5xl font-bold mb-6 text-neptune-gradient">
-            How Neptune Protects You
+            How Neptune Empowers You
           </h2>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            Our AI-powered oracle scans your music against a decentralized database to ensure originality
+            Our AI-powered platform transforms your musical ideas into professional tracks while securing your ownership
           </p>
         </div>
 
@@ -54,13 +54,13 @@ export function Features() {
               <Database className="h-6 w-6" style={{ color: "var(--neptune-violet-400)" }} />
             </div>
             <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
-              Decentralized Database
+              Intuitive Creation
             </h3>
             <p className="text-gray-400 mb-4">
-              Built on Story Protocol, our platform maintains a comprehensive, decentralized database of registered music and samples.
+              Express your musical ideas through humming, tapping rhythms, or simply typing descriptive text.
             </p>
             <p className="text-gray-400">
-              This blockchain-based approach ensures transparency and immutability in tracking intellectual property.
+              Our AI translates your input into structured musical compositions that capture your creative intent.
             </p>
           </div>
 
@@ -69,13 +69,13 @@ export function Features() {
               <Zap className="h-6 w-6" style={{ color: "var(--neptune-violet-400)" }} />
             </div>
             <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
-              AI-Powered Analysis
+              Real-time Editing
             </h3>
             <p className="text-gray-400 mb-4">
-              Our advanced AI algorithms scan your music to detect potential copyright conflicts, even in short samples or modified audio.
+              Edit and arrange your music in real-time with simple controls, without needing complex software or technical skills.
             </p>
             <p className="text-gray-400">
-              Get instant feedback on potential issues before releasing your tracks.
+              Instantly hear how your changes affect the composition and refine until it sounds perfect.
             </p>
           </div>
 
@@ -84,13 +84,13 @@ export function Features() {
               <Shield className="h-6 w-6" style={{ color: "var(--neptune-violet-400)" }} />
             </div>
             <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
-              Verification Certificates
+              Instant Ownership
             </h3>
             <p className="text-gray-400 mb-4">
-              Receive blockchain-verified certificates for your original works, providing proof of verification.
+              Your creations are automatically registered on the blockchain, establishing clear intellectual property rights.
             </p>
             <p className="text-gray-400">
-              Share these certificates with platforms, labels, and collaborators to demonstrate due diligence.
+              Secure ownership of your tracks from the moment they're created, with immutable proof of authorship.
             </p>
           </div>
 
@@ -99,13 +99,13 @@ export function Features() {
               <Globe className="h-6 w-6" style={{ color: "var(--neptune-violet-400)" }} />
             </div>
             <h3 className="text-xl font-bold mb-4 text-white flex items-center gap-2">
-              Global Protection
+              Accessible to Everyone
             </h3>
             <p className="text-gray-400 mb-4">
-              Our system continuously scans the internet for new music, ensuring the most up-to-date protection.
+              Create professional-quality music regardless of your musical background or technical expertise.
             </p>
             <p className="text-gray-400">
-              Stay protected against emerging content and evolving copyright landscapes worldwide.
+              Our platform democratizes music production, making it accessible to creators of all skill levels.
             </p>
           </div>
         </div>

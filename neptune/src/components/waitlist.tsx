@@ -124,7 +124,7 @@ export function Waitlist() {
               Join the Waitlist
             </h2>
             <p className="mx-auto max-w-[700px] text-gray-300 md:text-lg">
-              Be the first to know when we launch and protect your music from copyright issues.
+              Be the first to create and own music with our revolutionary AI platform.
             </p>
           </div>
           
@@ -167,9 +167,11 @@ export function Waitlist() {
           
           <div className="flex items-center gap-2 text-sm text-gray-400">
             <div className="h-px w-16 bg-gradient-to-r from-transparent to-[var(--neptune-violet-600)]"></div>
-            <span>AI-Powered</span>
+            <span>Create</span>
             <span>•</span>
-            <span>Blockchain Verified</span>
+            <span>Edit</span>
+            <span>•</span>
+            <span>Own</span>
             <div className="h-px w-16 bg-gradient-to-l from-transparent to-[var(--neptune-violet-600)]"></div>
           </div>
         </div>

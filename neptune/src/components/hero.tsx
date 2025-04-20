@@ -256,7 +256,7 @@ export function Hero() {
 
         <div className="mb-8 fade-in-up" style={{ animationDelay: "0.3s" }}>
           <p className="text-xl md:text-2xl text-gray-300 max-w-3xl mx-auto">
-          The AI-powered oracle protecting music creators from unintentional copyright infringement
+          Make music creation as effortless as writing text—just hum, tap, or type, and own your original track instantly
           </p>
         </div>
 
@@ -312,7 +312,7 @@ export function Hero() {
           </span>
           <span className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[var(--neptune-purple-400)]"></span>
-            Blockchain Verified
+            Blockchain Verified Ownership
           </span>
         </div>
       </div>

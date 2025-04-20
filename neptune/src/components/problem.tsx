@@ -43,10 +43,9 @@ export function Problem() {
 
       <div ref={problemRef} className="relative z-10 max-w-6xl mx-auto">
         <div className="text-center mb-16 fade-in-up">
-          <h2 className="text-3xl md:text-5xl font-bold mb-6 text-neptune-gradient">The Problem for Music Creators</h2>
+          <h2 className="text-3xl md:text-5xl font-bold mb-6 text-neptune-gradient">Barriers to Music Creation</h2>
           <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-            In today's music industry, unintentional copyright infringement can destroy careers and lead to costly legal
-            battles.
+            Traditional music production is complex, expensive, and requires specialized skills—we're changing that.
           </p>
         </div>
 
@@ -55,9 +54,9 @@ export function Problem() {
             <div className="feature-icon mb-6">
               <AlertTriangle className="h-6 w-6" style={{ color: "var(--neptune-violet-400)" }} />
             </div>
-            <h3 className="text-xl font-bold mb-4 text-white">Accidental Sampling</h3>
+            <h3 className="text-xl font-bold mb-4 text-white">Technical Barriers</h3>
             <p className="text-gray-400">
-              Even a few seconds of uncleared samples can lead to copyright claims, lost revenue, and legal issues.
+              Complex music software and equipment create a steep learning curve for beginners wanting to express themselves musically.
             </p>
           </div>
 
@@ -65,9 +64,9 @@ export function Problem() {
             <div className="feature-icon mb-6">
               <Shield className="h-6 w-6" style={{ color: "var(--neptune-violet-400)" }} />
             </div>
-            <h3 className="text-xl font-bold mb-4 text-white">Unclear Ownership</h3>
+            <h3 className="text-xl font-bold mb-4 text-white">Ownership Concerns</h3>
             <p className="text-gray-400">
-              The complex web of music rights makes it difficult to know if your creative work is truly original.
+              Musicians struggle to establish and protect ownership of their original creations in the digital age.
             </p>
           </div>
 
@@ -75,10 +74,9 @@ export function Problem() {
             <div className="feature-icon mb-6">
               <Check className="h-6 w-6" style={{ color: "var(--neptune-violet-400)" }} />
             </div>
-            <h3 className="text-xl font-bold mb-4 text-white">Peace of Mind</h3>
+            <h3 className="text-xl font-bold mb-4 text-white">Creative Liberation</h3>
             <p className="text-gray-400">
-              Create with confidence knowing your work has been verified against a comprehensive database of protected
-              music.
+              Create with confidence using intuitive tools that translate your ideas into professional-quality music while securing your rights.
             </p>
           </div>
         </div>
