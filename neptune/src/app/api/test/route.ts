@@ -5,9 +5,14 @@ import { join } from "path"
 export async function POST(request: Request) {
   try {
     // Get parameters from request body
-    const { title, description, file, length } = await request.json()
 
-    // Log the received parameters
+    const formData = await request.formData()
+
+    const title = formData.get("title") as string
+    const description = formData.get("description") as string
+    const length = parseInt(formData.get("length") as string)
+    const file = formData.get("file") as File
+
     console.log("Received params:", { title, description, file, length })
 
     // Read the local WAV file
@@ -34,5 +39,3 @@ export async function GET(request: Request) {
     { status: 405 }
   )
 }
-
-

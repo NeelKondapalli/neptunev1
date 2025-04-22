@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Space_Grotesk } from "next/font/google"
 import "@/styles/globals.css"
+import { Toaster } from "sonner"
 
 const spaceGrotesk = Space_Grotesk({ subsets: ["latin"] })
 
@@ -25,6 +26,7 @@ export default function RootLayout({
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-900/20 via-violet-900/5 to-transparent pointer-events-none"></div>
         <div className="noise-overlay"></div>
         {children}
+        <Toaster position="bottom-right" richColors />
       </body>
   
     </html>

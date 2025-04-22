@@ -1,0 +1,16 @@
+import { Header } from "@/components/header"
+
+export default function AuthenticatedLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <>
+      <Header />
+      <main className="pt-16">
+        {children}
+      </main>
+    </>
+  )
+} 

@@ -1,9 +1,10 @@
 'use server'
 
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 
 export async function signUpForWaitlist(email: string) {
   try {
+    const supabase = createClient()
     const { error } = await supabase
       .from('signups')
       .insert([

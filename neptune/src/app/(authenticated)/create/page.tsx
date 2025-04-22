@@ -11,7 +11,7 @@ export default function GeneratePage() {
   const router = useRouter()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [file, setFile] = useState<string | null>(null)
+  const [file, setFile] = useState<File | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -31,16 +31,13 @@ export default function GeneratePage() {
       return
     }
 
+    setFile(file)
+
     const reader = new FileReader()
     reader.onload = (e) => {
       const result = e.target?.result
       if (typeof result === 'string') {
-        setAudioUrl(result)
-        setFile(JSON.stringify({ 
-          name: file.name,
-          type: file.type,
-          url: result
-        }))
+        setAudioUrl(result)        
       }
     }
     reader.readAsDataURL(file)
@@ -64,11 +61,7 @@ export default function GeneratePage() {
         reader.onload = (e) => {
           const result = e.target?.result
           if (typeof result === 'string') {
-            setFile(JSON.stringify({
-              name: 'recording.wav',
-              type: 'audio/wav',
-              url: result
-            }))
+            setFile(new File([result], 'recording.wav', { type: 'audio/wav' }))
           }
         }
         reader.readAsDataURL(blob)
@@ -109,55 +102,44 @@ export default function GeneratePage() {
       setError("Description is required")
       return
     }
-
-    if (isNaN(length) || length < 1 || length > 120) {
-      setError("Length must be between 1 and 120 seconds")
-      return
+  
+    const formData = new FormData()
+    formData.append("title", title)
+    formData.append("description", description)
+    formData.append("length", length.toString())
+  
+    if (file) {
+      formData.append("file", file)
     }
-
+  
     setError(null)
     setIsGenerating(true)
-
+  
     try {
-      let res
-      if (process.env.NEXT_PUBLIC_ENVIRONMENT === "test") {
-          res = await fetch("/api/test", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-          title, 
-          description, 
-          file,
-          length: length  
-        }),
+      const endpoint =
+        process.env.NEXT_PUBLIC_ENVIRONMENT === "test"
+          ? "/api/test"
+          : "/api/replicate"
+  
+      const res = await fetch(endpoint, {
+        method: "POST",
+        body: formData,
       })
-      } else {
-          res = await fetch("/api/replicate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            title, 
-            description, 
-            file,
-            length: length  
-          }),
-        })
-      }
-
+  
       if (!res.ok) {
         const data = await res.json()
         throw new Error(data.error || "Generation failed")
       }
-
+  
       const audioBlob = await res.blob()
       const url = URL.createObjectURL(audioBlob)
-      
       router.push(`/workspace?audio=${encodeURIComponent(url)}`)
     } catch (err: any) {
       setError(err.message || "Generation failed")
       setIsGenerating(false)
     }
   }
+  
 
   return (
     <div className="min-h-screen bg-black">
