@@ -7,6 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Mic, MicOff, Upload, X, ChevronDown, ChevronUp } from "lucide-react"
 
+interface PredictionResponse {
+  success: boolean;
+  predictionId: string;
+  status: string;
+  error?: string;
+}
+
 export default function GeneratePage() {
   const router = useRouter()
   const [title, setTitle] = useState("")
@@ -145,16 +152,22 @@ export default function GeneratePage() {
       }
 
       if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Generation failed")
+        const errorData = await res.json() as { error?: string }
+        throw new Error(errorData.error ?? "Generation failed")
       }
 
-      const audioBlob = await res.blob()
-      const url = URL.createObjectURL(audioBlob)
+      // Changed to handle JSON response with prediction ID
+      const data = await res.json() as PredictionResponse
       
-      router.push(`/workspace?audio=${encodeURIComponent(url)}`)
-    } catch (err: any) {
-      setError(err.message || "Generation failed")
+      if (data.success && data.predictionId) {
+        // Redirect to workspace with the prediction ID
+        router.push(`/workspace?predictionId=${data.predictionId}`)
+      } else {
+        throw new Error("No prediction ID returned")
+      }
+    } catch (err) {
+      const error = err as Error
+      setError(error.message ?? "Generation failed")
       setIsGenerating(false)
     }
   }
