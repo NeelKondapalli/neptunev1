@@ -20,6 +20,15 @@ interface ReplicateError extends Error {
 
 export async function POST(request: Request) {
   try {
+    // First check if the request is JSON
+    const contentType = request.headers.get('content-type')
+    if (!contentType?.includes('application/json')) {
+      return NextResponse.json(
+        { error: "Content-Type must be application/json" },
+        { status: 400 }
+      )
+    }
+
     const { title, description, file, length } = await request.json() as GenerationRequest;
     console.log("Received params:", { title, description, file, length })
 
