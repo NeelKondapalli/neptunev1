@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Mic, MicOff, Upload, X, ChevronDown, ChevronUp } from "lucide-react"
+import { Loader2, Mic, MicOff, Upload, X, ChevronDown, ChevronUp, Video } from "lucide-react"
 
 interface PredictionResponse {
   success: boolean;
@@ -19,6 +19,8 @@ export default function GeneratePage() {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [file, setFile] = useState<string | null>(null)
+  const [videoFile, setVideoFile] = useState<string | null>(null)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -27,6 +29,7 @@ export default function GeneratePage() {
   const [length, setLength] = useState(15)
   const mediaRecorder = useRef<MediaRecorder | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
 
   // Handle file upload
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,6 +110,42 @@ export default function GeneratePage() {
     }
   }
 
+  // Handle video upload
+  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.includes('video/')) {
+      setError("Please upload a video file")
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const result = e.target?.result
+      if (typeof result === 'string') {
+        setVideoUrl(result)
+        setVideoFile(JSON.stringify({ 
+          name: file.name,
+          type: file.type,
+          url: result
+        }))
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const clearVideo = () => {
+    if (videoUrl) {
+      URL.revokeObjectURL(videoUrl)
+    }
+    setVideoUrl(null)
+    setVideoFile(null)
+    if (videoInputRef.current) {
+      videoInputRef.current.value = ''
+    }
+  }
+
   const handleGenerate = async () => {
     if (!title.trim()) {
       setError("Title is required")
@@ -128,24 +167,26 @@ export default function GeneratePage() {
     try {
       let res
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === "test") {
-          res = await fetch("/api/test", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-          title, 
-          description, 
-          file,
-          length: length  
-        }),
-      })
-      } else {
-          res = await fetch("/api/replicate", {
+        res = await fetch("/api/test", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
             title, 
             description, 
             file,
+            videoFile,
+            length: length  
+          }),
+        })
+      } else {
+        res = await fetch("/api/replicate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            title, 
+            description, 
+            file,
+            videoFile,
             length: length  
           }),
         })
@@ -205,6 +246,48 @@ export default function GeneratePage() {
                 onChange={(e) => setDescription(e.target.value)}
                 className="bg-[var(--neptune-violet-700)]/30 border-[var(--neptune-violet-500)] focus:border-[var(--neptune-violet-400)] focus:ring-[var(--neptune-violet-400)] min-h-[100px]"
               />
+            </div>
+
+            <div>
+              <label className="block mb-2 text-gray-300">Reference Video (Optional)</label>
+              <div className="space-y-4">
+                {!videoUrl && (
+                  <div className="flex gap-4">
+                    <Button
+                      onClick={() => videoInputRef.current?.click()}
+                      className="flex-1 bg-[var(--neptune-violet-600)] hover:bg-[var(--neptune-violet-500)] border-[var(--neptune-violet-400)]"
+                      variant="outline"
+                    >
+                      <Video className="w-4 h-4 mr-2" />
+                      Upload Video
+                    </Button>
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoUpload}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+
+                {videoUrl && (
+                  <div className="bg-[var(--neptune-violet-700)]/30 border border-[var(--neptune-violet-500)] rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-400">Reference Video</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={clearVideo}
+                        className="hover:bg-[var(--neptune-violet-600)]/50"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <video controls src={videoUrl} className="w-full rounded-lg" />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div>
