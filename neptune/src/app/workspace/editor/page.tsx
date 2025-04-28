@@ -51,6 +51,11 @@ interface EditRequest {
   end: number;
 }
 
+interface EditResponse {
+  message: string;
+  success: boolean;
+}
+
 export default function EditorPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -101,12 +106,15 @@ export default function EditorPage() {
     // Add Timeline plugin
     const timeline = wavesurfer.registerPlugin(TimelinePlugin.create({
       container: timelineRef.current,
+      timeInterval: 5,
       primaryLabelInterval: 5,
       secondaryLabelInterval: 1,
-      primaryColor: 'rgb(255, 255, 255, 0.8)',
-      secondaryColor: 'rgb(255, 255, 255, 0.4)',
-      primaryFontColor: 'rgb(255, 255, 255, 0.8)',
-      secondaryFontColor: 'rgb(255, 255, 255, 0.4)',
+      style: {
+        color: 'rgb(255, 255, 255, 0.8)',
+        fontSize: '12px',
+        fontFamily: 'Arial',
+      },
+      secondaryLabelOpacity: 0.4,
     }))
 
     // Add Regions plugin
@@ -253,7 +261,7 @@ export default function EditorPage() {
       // In a real implementation, you'd extract just the audio from the selected region
       // For now, we'll just use the entire audio as a demo
       
-      const audioUrl = decodeURIComponent(searchParams.get("audio") || "");
+      const audioUrl = decodeURIComponent(searchParams.get("audio") ?? "");
       
       // Send to our API
       const response = await fetch("/api/edit-audio", {
@@ -275,7 +283,7 @@ export default function EditorPage() {
         throw new Error(errorData.error ?? "Failed to edit audio");
       }
       
-      const data = await response.json();
+      const data = await response.json() as EditResponse;
       
       // In a real implementation, you would:
       // 1. Replace just the edited segment in the waveform
@@ -379,7 +387,7 @@ export default function EditorPage() {
                   max={100}
                   step={1}
                   className="w-28 h-3"
-                  onValueChange={(values) => setVolume(values[0])}
+                  onValueChange={(values) => setVolume(values[0] ?? 100)}
                 />
               </div>
             </div>

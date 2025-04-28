@@ -1,10 +1,17 @@
 // src/app/api/replicate/route.ts
 import { NextResponse } from "next/server"
 import Replicate from "replicate"
+import Anthropic from '@anthropic-ai/sdk';
+import { prompts } from "./prompts";
+
 
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN!,
 })
+
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
 
 interface GenerationRequest {
   title: string;
@@ -23,8 +30,28 @@ export async function POST(request: Request) {
     const { title, description, file, length } = await request.json() as GenerationRequest;
     console.log("Received params:", { title, description, file, length })
 
+    if (!prompts?.[0]?.starter) {
+      throw new Error("Prompt template not found");
+    }
+
+    console.log("Generating refined prompt with Claude...");
+    const refinedPrompt = await anthropic.messages.create({
+      model: "claude-3-7-sonnet-20250219",
+      max_tokens: 1024,
+      messages: [{ 
+        role: "user", 
+        content: `${prompts[0].starter}\n\nHere is the music description: ${description ?? title ?? "A short rap beat"}` 
+      }],
+    });
+    console.log("Refined prompt generated:", refinedPrompt.content);
+
+    const firstContent = refinedPrompt.content?.[0];
+    if (!firstContent || firstContent.type !== 'text') {
+      throw new Error("Invalid response format from Claude");
+    }
+
     const input = {
-      prompt: description ?? title ?? "A short rap beat",
+      prompt: firstContent.text,
       duration: length,
       model_version: "stereo-melody-large",
     }
