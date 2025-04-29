@@ -3,6 +3,10 @@ import { NextResponse } from "next/server"
 import Replicate from "replicate"
 import Anthropic from '@anthropic-ai/sdk';
 import { prompts } from "./prompts";
+import { writeFile, mkdir } from 'fs/promises';
+import { join, dirname } from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs/promises';
 
 
 const replicate = new Replicate({
@@ -25,14 +29,31 @@ interface ReplicateError extends Error {
   request?: Request;
 }
 
+interface AudioFile {
+  name: string;
+  type: string;
+  url: string;
+}
+
+interface TmpFilesResponse {
+  data: {
+    id: string;
+    url: string;
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const { title, description, file, length } = await request.json() as GenerationRequest;
     console.log("Received params:", { title, description, file, length })
 
-    if (!prompts?.[0]?.starter) {
-      throw new Error("Prompt template not found");
+    if (!prompts?.[0]?.starter || !prompts?.[1]?.starter) {
+      throw new Error("Prompt templates not found");
     }
+
+    // Select the appropriate prompt based on whether there's a reference audio file
+    const promptTemplate = file ? prompts[1].starter : prompts[0].starter;
+    console.log("Using prompt template type:", file ? "reference" : "oneshot");
 
     console.log("Generating refined prompt with Claude...");
     const refinedPrompt = await anthropic.messages.create({
@@ -40,7 +61,7 @@ export async function POST(request: Request) {
       max_tokens: 1024,
       messages: [{ 
         role: "user", 
-        content: `${prompts[0].starter}\n\nHere is the music description: ${description ?? title ?? "A short rap beat"}` 
+        content: `${promptTemplate}\n\nHere is the music description: ${description ?? title ?? "A short rap beat"}. The song should be ${length} seconds long.` 
       }],
     });
     console.log("Refined prompt generated:", refinedPrompt.content);
@@ -50,25 +71,65 @@ export async function POST(request: Request) {
       throw new Error("Invalid response format from Claude");
     }
 
+    let inputAudioBuffer: Buffer | undefined;
+    if (file) {
+      try {
+        const audioFile = JSON.parse(file) as AudioFile;
+        console.log("Parsed audio file:", { name: audioFile.name, type: audioFile.type });
+        
+        const base64Data = audioFile.url.split(',')[1];
+        if (!base64Data) {
+          throw new Error("Invalid audio data format - no base64 data found");
+        }
+        console.log("Base64 data length:", base64Data.length);
+        
+        inputAudioBuffer = Buffer.from(base64Data, 'base64');
+        console.log("Buffer size:", inputAudioBuffer.length);
+      } catch (error) {
+        console.error("Error processing audio file:", error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        throw new Error(`Failed to process audio file: ${errorMessage}`);
+      }
+    }
+
     const input = {
       prompt: firstContent.text,
       duration: length,
       model_version: "stereo-melody-large",
+      ...(inputAudioBuffer && {
+        input_audio: inputAudioBuffer,
+        continuation: false
+      })
     }
 
-    // Create an asynchronous prediction instead of waiting for completion
-    const prediction = await replicate.predictions.create({
-      version: "b05b1dff1d8c6dc63d14b0cdb42135378dcb87f6373b0d3d341ede46e59e2b38",
-      model: "meta/musicgen",
-      input: input,
-    });
+    // Log the input for debugging
+    console.log("Replicate API input:", { ...input, input_audio: inputAudioBuffer ? "Buffer present" : undefined });
 
-    // Return the prediction ID to the client for status polling
-    return NextResponse.json({ 
-      success: true, 
-      predictionId: prediction.id,
-      status: prediction.status 
-    });
+    try {
+      // Create an asynchronous prediction instead of waiting for completion
+      const prediction = await replicate.predictions.create({
+        version: "b05b1dff1d8c6dc63d14b0cdb42135378dcb87f6373b0d3d341ede46e59e2b38",
+        model: "meta/musicgen",
+        input: input,
+      });
+
+      // Log the prediction response
+      console.log("Replicate prediction response:", prediction);
+
+      // Return the prediction ID to the client for status polling
+      return NextResponse.json({ 
+        success: true, 
+        predictionId: prediction.id,
+        status: prediction.status 
+      });
+    } catch (error) {
+      console.error("Error creating Replicate prediction:", error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      return NextResponse.json(
+        { error: `Failed to create prediction: ${errorMessage}` },
+        { status: 500 }
+      );
+    }
   } catch (err) {
     console.error("Error in /api/replicate:", err)
     const error = err as Error;

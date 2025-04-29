@@ -33,15 +33,19 @@ export default function GeneratePage() {
     const file = event.target.files?.[0]
     if (!file) return
 
+    console.log("File selected:", { name: file.name, type: file.type, size: file.size })
+
     if (!file.type.includes('audio/')) {
       setError("Please upload an audio file")
       return
     }
 
+    console.log("Starting file upload processing...")
     const reader = new FileReader()
     reader.onload = (e) => {
       const result = e.target?.result
       if (typeof result === 'string') {
+        console.log("File processed successfully, setting audio URL")
         setAudioUrl(result)
         setFile(JSON.stringify({ 
           name: file.name,
@@ -50,20 +54,31 @@ export default function GeneratePage() {
         }))
       }
     }
+    reader.onerror = (error) => {
+      console.error("Error reading file:", error)
+      setError("Failed to process audio file")
+    }
     reader.readAsDataURL(file)
   }
 
   // Handle recording
   const startRecording = async () => {
     try {
+      console.log("Requesting microphone access...")
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      console.log("Microphone access granted, initializing recorder")
       mediaRecorder.current = new MediaRecorder(stream)
       const chunks: BlobPart[] = []
 
-      mediaRecorder.current.ondataavailable = (e) => chunks.push(e.data)
+      mediaRecorder.current.ondataavailable = (e) => {
+        console.log("Recording data available:", e.data.size, "bytes")
+        chunks.push(e.data)
+      }
       mediaRecorder.current.onstop = () => {
+        console.log("Recording stopped, processing audio...")
         const blob = new Blob(chunks, { type: 'audio/wav' })
         const url = URL.createObjectURL(blob)
+        console.log("Audio processed, setting URL")
         setAudioUrl(url)
         
         // Convert blob to base64
@@ -71,33 +86,43 @@ export default function GeneratePage() {
         reader.onload = (e) => {
           const result = e.target?.result
           if (typeof result === 'string') {
+            console.log("Audio converted to base64")
             setFile(JSON.stringify({
-              name: 'recording.wav',
+              name: 'reference-audio.wav',
               type: 'audio/wav',
               url: result
             }))
           }
         }
+        reader.onerror = (error) => {
+          console.error("Error converting audio to base64:", error)
+          setError("Failed to process recorded audio")
+        }
         reader.readAsDataURL(blob)
       }
 
       mediaRecorder.current.start()
+      console.log("Recording started")
       setIsRecording(true)
     } catch (err) {
+      console.error("Failed to access microphone:", err)
       setError("Failed to access microphone")
     }
   }
 
   const stopRecording = () => {
     if (mediaRecorder.current && isRecording) {
+      console.log("Stopping recording...")
       mediaRecorder.current.stop()
       mediaRecorder.current.stream.getTracks().forEach(track => track.stop())
       setIsRecording(false)
+      console.log("Recording stopped and tracks released")
     }
   }
 
   const clearAudio = () => {
     if (audioUrl) {
+      console.log("Clearing audio URL")
       URL.revokeObjectURL(audioUrl)
     }
     setAudioUrl(null)
@@ -105,6 +130,7 @@ export default function GeneratePage() {
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
+    console.log("Audio cleared")
   }
 
   const handleGenerate = async () => {
@@ -209,6 +235,7 @@ export default function GeneratePage() {
 
             <div>
               <label className="block mb-2 text-gray-300">Reference Audio (Optional)</label>
+              <p className="text-sm text-gray-400 mb-2">Upload a sample OR record your own</p>
               <div className="space-y-4">
                 {!audioUrl && (
                   <div className="flex gap-4">
