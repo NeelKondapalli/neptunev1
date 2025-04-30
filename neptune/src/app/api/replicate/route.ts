@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       model_version: "stereo-melody-large",
       ...(fileUrl && {
         input_audio: fileUrl,
-        continuation: false
+        continuation: !(firstContent.text.toLowerCase().includes("remix") || firstContent.text.toLowerCase().includes("variation") || firstContent.text.toLowerCase().includes("reinterpret"))
       })
     }
 
