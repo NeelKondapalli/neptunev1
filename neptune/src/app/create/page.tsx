@@ -13,6 +13,7 @@ import * as Client from '@web3-storage/w3up-client'
 import { StoreMemory } from '@web3-storage/w3up-client/stores/memory'
 import * as Proof from '@web3-storage/w3up-client/proof'
 import { Signer } from '@web3-storage/w3up-client/principal/ed25519'
+import { set } from "node_modules/@web3-storage/w3up-client/dist/src/capability/plan"
 
 interface PredictionResponse {
   success: boolean;
@@ -103,11 +104,19 @@ export default function GeneratePage() {
         chunks.push(e.data)
       }
       mediaRecorder.current.onstop = () => {
-        console.log("Recording stopped, processing audio...")
-        const blob = new Blob(chunks, { type: 'audio/wav' })
+        const mime = mediaRecorder.current?.mimeType || 'audio/webm' // fallback
+        const blob = new Blob(chunks, { type: mime })
+
+        // 2️⃣ Create a File from that Blob
+        const recordedFile = new File([blob], `reference.${mime.split('/')[1]}`, { type: mime })
+        setFile(recordedFile)                      // <- use this in your upload flow
+
+        // 3️⃣ Preview: create an object-URL
         const url = URL.createObjectURL(blob)
-        console.log("Audio processed, setting URL")
         setAudioUrl(url)
+
+        console.log('Recorder mime:', mime)
+        console.log('File ready:', recordedFile.name, recordedFile.size, 'bytes')
         
         // Convert blob to base64
         const reader = new FileReader()
@@ -115,7 +124,6 @@ export default function GeneratePage() {
           const result = e.target?.result
           if (typeof result === 'string') {
             console.log("Audio converted to base64")
-            setFile(new File([result], 'reference-audio.wav', { type: 'audio/wav' }))
           }
         }
         reader.onerror = (error) => {
@@ -130,7 +138,15 @@ export default function GeneratePage() {
       setIsRecording(true)
     } catch (err) {
       console.error("Failed to access microphone:", err)
-      setError("Failed to access microphone")
+      if (err instanceof DOMException && err.name === 'NotAllowedError') {
+        setError("Microphone access was denied. Please allow microphone access in your browser settings and try again.")
+        const retry = window.confirm("Microphone access was denied. Would you like to try again?")
+        if (retry) {
+          startRecording()
+        }
+      } else {
+        setError("Failed to access microphone")
+      }
     }
   }
 
@@ -364,10 +380,19 @@ export default function GeneratePage() {
                       type="number"
                       min={1}
                       max={120}
-                      value={length}
-                      onChange={(e) => setLength(Number(e.target.value))}
+                      value={length === 0 ? '' : length}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        if (!isNaN(val)) setLength(val);
+                      }}
+                      onKeyDown={(e) => {
+                        if (["e", "E", "+", "-"].includes(e.key)) {
+                          e.preventDefault();
+                        }
+                      }}
                       className="bg-[var(--neptune-violet-700)]/30 border-[var(--neptune-violet-500)] focus:border-[var(--neptune-violet-400)] focus:ring-[var(--neptune-violet-400)]"
                     />
+
                     <p className="mt-1 text-xs text-gray-400">
                       Enter a value between 1 and 120 seconds (default: 15)
                     </p>
@@ -402,3 +427,5 @@ export default function GeneratePage() {
     </div>
   )
 }
+
+
