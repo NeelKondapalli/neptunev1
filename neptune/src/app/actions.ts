@@ -11,7 +11,7 @@ export async function signUpForWaitlist(email: string) {
       ])
 
     if (error) {
-      if (error.code === '23505') { // Unique violation
+      if (error.code === '23505') {
         return { success: false, message: 'You have already signed up for the waitlist!' }
       }
       throw error

@@ -20,7 +20,7 @@ const anthropic = new Anthropic({
 interface GenerationRequest {
   title: string;
   description: string;
-  file: string | null;
+  fileUrl: string | null;
   length: number;
 }
 
@@ -44,16 +44,16 @@ interface TmpFilesResponse {
 
 export async function POST(request: Request) {
   try {
-    const { title, description, file, length } = await request.json() as GenerationRequest;
-    console.log("Received params:", { title, description, file, length })
+    const { title, description, fileUrl, length } = await request.json() as GenerationRequest;
+    console.log("Received params:", { title, description, fileUrl, length })
 
     if (!prompts?.[0]?.starter || !prompts?.[1]?.starter) {
       throw new Error("Prompt templates not found");
     }
 
     // Select the appropriate prompt based on whether there's a reference audio file
-    const promptTemplate = file ? prompts[1].starter : prompts[0].starter;
-    console.log("Using prompt template type:", file ? "reference" : "oneshot");
+    const promptTemplate = fileUrl ? prompts[1].starter : prompts[0].starter;
+    console.log("Using prompt template type:", fileUrl ? "reference" : "oneshot");
 
     console.log("Generating refined prompt with Claude...");
     const refinedPrompt = await anthropic.messages.create({
@@ -72,51 +72,48 @@ export async function POST(request: Request) {
     }
 
     let inputAudioBuffer: Buffer | undefined;
-    if (file) {
-      try {
-        const audioFile = JSON.parse(file) as AudioFile;
-        console.log("Parsed audio file:", { name: audioFile.name, type: audioFile.type });
+    // if (fileUrl) {
+    //   try {
+    //     const audioFile = JSON.parse(file) as AudioFile;
+    //     console.log("Parsed audio file:", { name: audioFile.name, type: audioFile.type });
         
-        const base64Data = audioFile.url.split(',')[1];
-        if (!base64Data) {
-          throw new Error("Invalid audio data format - no base64 data found");
-        }
-        console.log("Base64 data length:", base64Data.length);
+    //     const base64Data = audioFile.url.split(',')[1];
+    //     if (!base64Data) {
+    //       throw new Error("Invalid audio data format - no base64 data found");
+    //     }
+    //     console.log("Base64 data length:", base64Data.length);
         
-        inputAudioBuffer = Buffer.from(base64Data, 'base64');
-        console.log("Buffer size:", inputAudioBuffer.length);
-      } catch (error) {
-        console.error("Error processing audio file:", error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-        throw new Error(`Failed to process audio file: ${errorMessage}`);
-      }
-    }
+    //     inputAudioBuffer = Buffer.from(base64Data, 'base64');
+    //     console.log("Buffer size:", inputAudioBuffer.length);
+    //   } catch (error) {
+    //     console.error("Error processing audio file:", error);
+    //     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    //     throw new Error(`Failed to process audio file: ${errorMessage}`);
+    //   }
+    // }
 
     const input = {
       prompt: firstContent.text,
       duration: length,
       model_version: "stereo-melody-large",
-      ...(inputAudioBuffer && {
-        input_audio: inputAudioBuffer,
+      ...(fileUrl && {
+        input_audio: fileUrl,
         continuation: false
       })
     }
 
-    // Log the input for debugging
-    console.log("Replicate API input:", { ...input, input_audio: inputAudioBuffer ? "Buffer present" : undefined });
+    console.log("Replicate API input:", { ...input, input_audio: fileUrl ? "File URL present" : undefined });
 
     try {
-      // Create an asynchronous prediction instead of waiting for completion
       const prediction = await replicate.predictions.create({
         version: "b05b1dff1d8c6dc63d14b0cdb42135378dcb87f6373b0d3d341ede46e59e2b38",
         model: "meta/musicgen",
         input: input,
       });
 
-      // Log the prediction response
+
       console.log("Replicate prediction response:", prediction);
 
-      // Return the prediction ID to the client for status polling
       return NextResponse.json({ 
         success: true, 
         predictionId: prediction.id,
@@ -146,7 +143,6 @@ interface ReplicateOutput {
   id: string;
 }
 
-// Add a new endpoint to check prediction status
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
@@ -163,7 +159,7 @@ export async function GET(request: Request) {
       const url = Array.isArray(output) ? output[0] : output;
       
       if (url) {
-        // Fetch the audio file bytes from the URL
+
         const audioRes = await fetch(url);
         if (!audioRes.ok) {
           throw new Error(`Failed to fetch audio: ${audioRes.status}`);
@@ -171,7 +167,7 @@ export async function GET(request: Request) {
         const arrayBuffer = await audioRes.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // Stream the raw audio back
+
         return new NextResponse(buffer, {
           status: 200,
           headers: {
@@ -182,8 +178,7 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: "Output URL not found" }, { status: 404 });
       }
     }
-    
-    // If not succeeded yet, return the current status
+   
     return NextResponse.json({
       success: true,
       predictionId: id,

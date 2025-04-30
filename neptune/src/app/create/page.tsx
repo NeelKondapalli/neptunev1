@@ -1,11 +1,18 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Mic, MicOff, Upload, X, ChevronDown, ChevronUp } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { create } from "@web3-storage/w3up-client";
+
+import * as Client from '@web3-storage/w3up-client'
+import { StoreMemory } from '@web3-storage/w3up-client/stores/memory'
+import * as Proof from '@web3-storage/w3up-client/proof'
+import { Signer } from '@web3-storage/w3up-client/principal/ed25519'
 
 interface PredictionResponse {
   success: boolean;
@@ -18,15 +25,41 @@ export default function GeneratePage() {
   const router = useRouter()
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [file, setFile] = useState<string | null>(null)
+  const [file, setFile] = useState<File | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [length, setLength] = useState(15)
+  const [client, setClient] = useState<any>(null)
   const mediaRecorder = useRef<MediaRecorder | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const initClient = async () => {
+      try {
+        if (!process.env.NEXT_PUBLIC_KEY) {
+          throw new Error("KEY is not set")
+        }
+        if (!process.env.NEXT_PUBLIC_PROOF) {
+          throw new Error("PROOF is not set")
+        }
+        const principal = Signer.parse(process.env.NEXT_PUBLIC_KEY)
+        const store = new StoreMemory()
+        const client = await Client.create({ principal, store })
+
+        const proof = await Proof.parse(process.env.NEXT_PUBLIC_PROOF)
+        const space = await client.addSpace(proof)
+        await client.setCurrentSpace(space.did())
+        setClient(client)
+      } catch (err) {
+        console.error('Failed to initialize Web3.Storage client:', err);
+        setError('Failed to initialize storage client');
+      }
+    };
+    initClient();
+  }, []);
 
   // Handle file upload
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -39,7 +72,7 @@ export default function GeneratePage() {
       setError("Please upload an audio file")
       return
     }
-
+    setFile(file)
     console.log("Starting file upload processing...")
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -47,11 +80,6 @@ export default function GeneratePage() {
       if (typeof result === 'string') {
         console.log("File processed successfully, setting audio URL")
         setAudioUrl(result)
-        setFile(JSON.stringify({ 
-          name: file.name,
-          type: file.type,
-          url: result
-        }))
       }
     }
     reader.onerror = (error) => {
@@ -61,7 +89,7 @@ export default function GeneratePage() {
     reader.readAsDataURL(file)
   }
 
-  // Handle recording
+  
   const startRecording = async () => {
     try {
       console.log("Requesting microphone access...")
@@ -87,11 +115,7 @@ export default function GeneratePage() {
           const result = e.target?.result
           if (typeof result === 'string') {
             console.log("Audio converted to base64")
-            setFile(JSON.stringify({
-              name: 'reference-audio.wav',
-              type: 'audio/wav',
-              url: result
-            }))
+            setFile(new File([result], 'reference-audio.wav', { type: 'audio/wav' }))
           }
         }
         reader.onerror = (error) => {
@@ -148,30 +172,54 @@ export default function GeneratePage() {
       return
     }
 
+    if (!client) {
+      setError("Storage client not initialized")
+      return
+    }
+
     setError(null)
     setIsGenerating(true)
 
+    let fileURL = null
+
     try {
+      if (file) {
+        const cid = await client.uploadFile(file);
+        
+        if (!cid) {
+          throw new Error("Failed to get CID after upload")
+        }
+        
+        fileURL = `https://${cid}.ipfs.w3s.link`;
+        console.log("File uploaded successfully:", fileURL);
+      }
+
+      if (file && !fileURL) {
+        setError("Failed to upload file")
+        setIsGenerating(false)
+        return
+      }
+
       let res
       if (process.env.NEXT_PUBLIC_ENVIRONMENT === "test") {
-          res = await fetch("/api/test", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-          title, 
-          description, 
-          file,
-          length: length  
-        }),
-      })
-      } else {
-          res = await fetch("/api/replicate", {
+        res = await fetch("/api/test", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
             title, 
             description, 
-            file,
+            fileUrl: fileURL,
+            length: length  
+          }),
+        })
+      } else {
+        res = await fetch("/api/replicate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            title, 
+            description, 
+            fileUrl: fileURL,
             length: length  
           }),
         })
@@ -182,11 +230,9 @@ export default function GeneratePage() {
         throw new Error(errorData.error ?? "Generation failed")
       }
 
-      // Changed to handle JSON response with prediction ID
       const data = await res.json() as PredictionResponse
       
       if (data.success && data.predictionId) {
-        // Redirect to workspace with the prediction ID
         router.push(`/workspace?predictionId=${data.predictionId}`)
       } else {
         throw new Error("No prediction ID returned")

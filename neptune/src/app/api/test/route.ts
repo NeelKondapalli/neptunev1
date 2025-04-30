@@ -5,10 +5,10 @@ import { join } from "path"
 export async function POST(request: Request) {
   try {
     // Get parameters from request body
-    const { title, description, file, length } = await request.json()
+    const { title, description, fileUrl, length } = await request.json()
 
     // Log the received parameters
-    console.log("Received params:", { title, description, file, length })
+    console.log("Received params:", { title, description, fileUrl, length })
 
     // Read the local WAV file
     const filePath = join(process.cwd(), "src/app/api/test/file_example_WAV_2MG.wav")
