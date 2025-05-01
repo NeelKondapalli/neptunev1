@@ -64,18 +64,18 @@ async function uploadToIPFS(audioData: string): Promise<string> {
     const file = new File([blob], 'reference.wav', { type: 'audio/wav' });
 
     // Initialize web3.storage client
-    if (!process.env.NEXT_PUBLIC_KEY) {
-      throw new Error("NEXT_PUBLIC_KEY is not set");
+    if (!process.env.KEY) {
+      throw new Error("KEY is not set");
     }
-    if (!process.env.NEXT_PUBLIC_PROOF) {
-      throw new Error("NEXT_PUBLIC_PROOF is not set");
+    if (!process.env.PROOF) {
+      throw new Error("PROOF is not set");
     }
 
-    const principal = Signer.parse(process.env.NEXT_PUBLIC_KEY);
+    const principal = Signer.parse(process.env.KEY);
     const store = new StoreMemory();
     const client = await Client.create({ principal, store });
 
-    const proof = await Proof.parse(process.env.NEXT_PUBLIC_PROOF);
+    const proof = await Proof.parse(process.env.PROOF);
     const space = await client.addSpace(proof);
     await client.setCurrentSpace(space.did());
 

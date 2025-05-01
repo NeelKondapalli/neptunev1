@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import WaveSurfer from "wavesurfer.js"
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions"
@@ -136,7 +136,7 @@ function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
   return buffer2;
 }
 
-export default function EditorPage() {
+function EditorContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const audioUrl = searchParams.get("audio")
@@ -361,7 +361,7 @@ export default function EditorPage() {
       // Add to history with pending status
       setEditHistory(prev => [newEdit, ...prev]);
       
-      // Get audio data for the selected region
+      // Get audio data for the selected region from current audio
       const audioContext = new AudioContext();
       const originalAudio = wavesurferRef.current.getMediaElement();
       if (!originalAudio) throw new Error("No audio element found");
@@ -708,6 +708,15 @@ export default function EditorPage() {
           <Button
             variant="outline"
             className="bg-[var(--neptune-violet-700)]/20 border-[var(--neptune-violet-500)] hover:bg-[var(--neptune-violet-700)]/30"
+            onClick={() => {
+              const currentAudio = wavesurferRef.current?.getMediaElement();
+              if (!currentAudio?.src) return;
+              
+              const a = document.createElement('a');
+              a.href = currentAudio.src;
+              a.download = 'edited-melody.wav';
+              a.click();
+            }}
           >
             <Save className="h-4 w-4 mr-2" />
             Save Project
@@ -1089,5 +1098,17 @@ export default function EditorPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function EditorPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-[var(--neptune-purple-400)] animate-spin" />
+      </div>
+    }>
+      <EditorContent />
+    </Suspense>
   )
 } 

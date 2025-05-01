@@ -52,16 +52,16 @@ export default function GeneratePage() {
         }
 
         // Only initialize Web3.Storage if we have the required environment variables
-        if (!process.env.NEXT_PUBLIC_KEY || !process.env.NEXT_PUBLIC_PROOF) {
+        if (!process.env.KEY || !process.env.PROOF) {
           console.warn("Web3.Storage environment variables not set. File uploads will be disabled.");
           return;
         }
 
-        const principal = Signer.parse(process.env.NEXT_PUBLIC_KEY)
+        const principal = Signer.parse(process.env.KEY)
         const store = new StoreMemory()
         const client = await Client.create({ principal, store })
 
-        const proof = await Proof.parse(process.env.NEXT_PUBLIC_PROOF)
+        const proof = await Proof.parse(process.env.PROOF)
         const space = await client.addSpace(proof)
         await client.setCurrentSpace(space.did())
         setClient(client)
