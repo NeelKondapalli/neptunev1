@@ -21,7 +21,8 @@ import {
   Volume2,
   VolumeX,
   Layers,
-  MessageSquarePlus
+  MessageSquarePlus,
+  Loader2
 } from "lucide-react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -52,8 +53,87 @@ interface EditRequest {
 }
 
 interface EditResponse {
-  message: string;
   success: boolean;
+  predictionId: string;
+  status: string;
+  metadata: {
+    regionId: string;
+    start: number;
+    end: number;
+    prompt: string;
+    refinedPrompt: string;
+    ipfsHash: string;
+    editTimestamp: string;
+  };
+}
+
+interface ReplicateResponse {
+  status: string;
+  output?: string;
+  error?: string;
+  logs?: string[];
+}
+
+interface EditHistoryItem {
+  prompt: string;
+  timestamp: string;
+  predictionId: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  originalAudioUrl: string;
+  newAudioUrl?: string;
+  error?: string;
+}
+
+function audioBufferToWav(buffer: AudioBuffer): ArrayBuffer {
+  const numOfChan = buffer.numberOfChannels;
+  const length = buffer.length * numOfChan * 2;
+  const buffer2 = new ArrayBuffer(44 + length);
+  const view = new DataView(buffer2);
+  const channels = [];
+  let offset = 0;
+  let pos = 0;
+
+  // write WAVE header
+  setUint32(0x46464952);                         // "RIFF"
+  setUint32(36 + length);                        // file length - 8
+  setUint32(0x45564157);                         // "WAVE"
+  setUint32(0x20746d66);                         // "fmt " chunk
+  setUint32(16);                                 // length = 16
+  setUint16(1);                                  // PCM (uncompressed)
+  setUint16(numOfChan);
+  setUint32(buffer.sampleRate);
+  setUint32(buffer.sampleRate * 2 * numOfChan);  // avg. bytes/sec
+  setUint16(numOfChan * 2);                      // block-align
+  setUint16(16);                                 // 16-bit
+  setUint32(0x61746164);                         // "data" - chunk
+  setUint32(length);                             // chunk length
+
+  // write interleaved data
+  for (let i = 0; i < buffer.numberOfChannels; i++) {
+    channels.push(buffer.getChannelData(i));
+  }
+
+  while (pos < buffer.length) {
+    for (let i = 0; i < numOfChan; i++) {
+      let sample = Math.max(-1, Math.min(1, channels[i]?.[pos] ?? 0));
+      sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+      view.setInt16(44 + offset, sample, true);
+      offset += 2;
+    }
+    pos++;
+  }
+
+  function setUint16(data: number) {
+    view.setUint16(pos, data, true);
+    pos += 2;
+  }
+
+  function setUint32(data: number) {
+    view.setUint32(pos, data, true);
+    pos += 4;
+  }
+
+  return buffer2;
 }
 
 export default function EditorPage() {
@@ -67,7 +147,9 @@ export default function EditorPage() {
   const [selectedRegion, setSelectedRegion] = useState<Region | null>(null)
   const [editPrompt, setEditPrompt] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
-  const [editHistory, setEditHistory] = useState<{ prompt: string; timestamp: string }[]>([])
+  const [editHistory, setEditHistory] = useState<EditHistoryItem[]>([])
+  const [isPolling, setIsPolling] = useState(false)
+  const [currentPredictionId, setCurrentPredictionId] = useState<string | null>(null)
   
   const waveformRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -242,26 +324,112 @@ export default function EditorPage() {
     }, 10)
   }
 
-  const handleAIEdit = async () => {
-    if (!selectedRegion || !editPrompt.trim() || !wavesurferRef.current) return
-    
-    setIsProcessing(true)
+  // Add function to revert to a previous version
+  const handleRevert = async (edit: EditHistoryItem) => {
+    if (!wavesurferRef.current) return;
     
     try {
-      // Add to history
-      setEditHistory(prev => [
-        { 
-          prompt: editPrompt, 
-          timestamp: new Date().toLocaleTimeString() 
-        }, 
-        ...prev
-      ])
+      // Load the original audio URL
+      await wavesurferRef.current.load(edit.originalAudioUrl);
+      
+      // Remove all edits after this one
+      setEditHistory(prev => prev.filter(item => 
+        new Date(item.timestamp) <= new Date(edit.timestamp)
+      ));
+    } catch (error) {
+      console.error("Error reverting audio:", error);
+      alert("Failed to revert audio: " + (error instanceof Error ? error.message : "Unknown error"));
+    }
+  };
+
+  // Update handleAIEdit to include more metadata
+  const handleAIEdit = async () => {
+    if (!selectedRegion || !editPrompt.trim() || !wavesurferRef.current) return;
+    
+    setIsProcessing(true);
+    
+    // Create new edit item outside try block
+    const newEdit: EditHistoryItem = {
+      prompt: editPrompt,
+      timestamp: new Date().toLocaleTimeString(),
+      predictionId: '',
+      status: 'pending',
+      originalAudioUrl: decodeURIComponent(searchParams.get("audio") ?? "")
+    };
+    
+    try {
+      // Add to history with pending status
+      setEditHistory(prev => [newEdit, ...prev]);
       
       // Get audio data for the selected region
-      // In a real implementation, you'd extract just the audio from the selected region
-      // For now, we'll just use the entire audio as a demo
+      const audioContext = new AudioContext();
+      const originalAudio = wavesurferRef.current.getMediaElement();
+      if (!originalAudio) throw new Error("No audio element found");
       
-      const audioUrl = decodeURIComponent(searchParams.get("audio") ?? "");
+      // Load the original audio
+      const originalBuffer = await fetch(decodeURIComponent(searchParams.get("audio") ?? ""))
+        .then(r => r.arrayBuffer())
+        .then(buffer => audioContext.decodeAudioData(buffer));
+      
+      // Create a new buffer for the selected region
+      const startSample = Math.floor(selectedRegion.start * originalBuffer.sampleRate);
+      const endSample = Math.floor(selectedRegion.end * originalBuffer.sampleRate);
+      const segmentLength = endSample - startSample;
+      
+      const segmentBuffer = audioContext.createBuffer(
+        originalBuffer.numberOfChannels,
+        segmentLength,
+        originalBuffer.sampleRate
+      );
+      
+      // Copy the selected region to the new buffer
+      for (let channel = 0; channel < originalBuffer.numberOfChannels; channel++) {
+        const originalData = originalBuffer.getChannelData(channel);
+        const segmentData = segmentBuffer.getChannelData(channel);
+        for (let i = 0; i < segmentLength; i++) {
+          segmentData[i] = originalData[startSample + i] ?? 0;
+        }
+      }
+      
+      // Convert the segment buffer to a WAV blob
+      const wavBlob = await new Promise<Blob>((resolve, reject) => {
+        const offlineContext = new OfflineAudioContext(
+          segmentBuffer.numberOfChannels,
+          segmentBuffer.length,
+          segmentBuffer.sampleRate
+        );
+        const source = offlineContext.createBufferSource();
+        source.buffer = segmentBuffer;
+        source.connect(offlineContext.destination);
+        source.start();
+        offlineContext.startRendering()
+          .then((renderedBuffer) => {
+            const wav = audioBufferToWav(renderedBuffer);
+            resolve(new Blob([wav], { type: 'audio/wav' }));
+          })
+          .catch(error => {
+            console.error("Error rendering audio:", error);
+            reject(error instanceof Error ? error : new Error(String(error)));
+          });
+      });
+      
+      // Convert blob to base64
+      const reader = new FileReader();
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        reader.onload = (e) => {
+          const result = e.target?.result;
+          if (typeof result === 'string') {
+            resolve(result);
+          } else {
+            reject(new Error("Failed to convert audio to base64"));
+          }
+        };
+        reader.onerror = () => reject(new Error("Failed to read audio data"));
+        reader.readAsDataURL(wavBlob);
+      });
+      
+      // Clean up
+      void audioContext.close();
       
       // Send to our API
       const response = await fetch("/api/edit-audio", {
@@ -271,10 +439,11 @@ export default function EditorPage() {
         },
         body: JSON.stringify({
           prompt: editPrompt,
-          audioData: audioUrl, // Ideally this would be just the selected segment
+          audioData: base64Data,
           regionId: selectedRegion.id,
           start: selectedRegion.start,
           end: selectedRegion.end,
+          originalAudioUrl: decodeURIComponent(searchParams.get("audio") ?? ""),
         }),
       });
       
@@ -285,22 +454,227 @@ export default function EditorPage() {
       
       const data = await response.json() as EditResponse;
       
-      // In a real implementation, you would:
-      // 1. Replace just the edited segment in the waveform
-      // 2. Update the audio visualization
+      // Update the edit history with the prediction ID
+      setEditHistory(prev => prev.map(item => 
+        item.timestamp === newEdit.timestamp 
+          ? { ...item, predictionId: data.predictionId, status: 'processing' }
+          : item
+      ));
       
-      // For now, just show a success message
-      console.log("Edit successful:", data.message);
-      alert(data.message);
+      // Start polling for the prediction
+      setCurrentPredictionId(data.predictionId);
+      setIsPolling(true);
       
       setEditPrompt("");
     } catch (error) {
       console.error("AI Edit failed:", error);
+      // Update the edit history to show failure
+      setEditHistory(prev => prev.map(item => 
+        item.timestamp === newEdit.timestamp 
+          ? { ...item, status: 'failed' }
+          : item
+      ));
       alert("Failed to edit audio: " + (error instanceof Error ? error.message : "Unknown error"));
     } finally {
       setIsProcessing(false);
     }
-  }
+  };
+
+  // Update the polling effect to handle edit history
+  useEffect(() => {
+    if (!currentPredictionId || !isPolling) return;
+
+    const pollInterval = setInterval(() => {
+      void (async () => {
+        try {
+          const response = await fetch(`/api/replicate?id=${currentPredictionId}`);
+          if (!response.ok) {
+            throw new Error("Failed to fetch prediction status");
+          }
+
+          // Check content type to determine if it's JSON status or audio data
+          const contentType = response.headers.get("Content-Type") ?? "";
+          
+          if (contentType.includes("audio")) {
+            // If content is audio, create URL for it
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+
+            // Replace the audio segment in the waveform
+            if (wavesurferRef.current && selectedRegion) {
+              const audioContext = new AudioContext();
+              try {
+                // Load both the original audio and the new snippet
+                const [originalBuffer, newBuffer] = await Promise.all([
+                  fetch(decodeURIComponent(searchParams.get("audio") ?? ""))
+                    .then(r => r.arrayBuffer())
+                    .then(buffer => audioContext.decodeAudioData(buffer)),
+                  fetch(audioUrl)
+                    .then(r => r.arrayBuffer())
+                    .then(buffer => audioContext.decodeAudioData(buffer))
+                ]);
+
+                // Create a new buffer with the same length as the original
+                const outputBuffer = audioContext.createBuffer(
+                  originalBuffer.numberOfChannels,
+                  originalBuffer.length,
+                  originalBuffer.sampleRate
+                );
+
+                // Copy the original audio
+                for (let channel = 0; channel < originalBuffer.numberOfChannels; channel++) {
+                  const originalData = originalBuffer.getChannelData(channel);
+                  const outputData = outputBuffer.getChannelData(channel);
+                  originalData.forEach((sample, i) => {
+                    outputData[i] = sample;
+                  });
+                }
+
+                // Replace just the selected region with the new audio
+                const startSample = Math.floor(selectedRegion.start * originalBuffer.sampleRate);
+                const endSample = Math.floor(selectedRegion.end * originalBuffer.sampleRate);
+                const segmentLength = endSample - startSample;
+                
+                // Crossfade duration in samples (50ms)
+                const crossfadeSamples = Math.floor(0.05 * originalBuffer.sampleRate);
+
+                // Copy the new audio into the selected region with crossfading
+                for (let channel = 0; channel < outputBuffer.numberOfChannels; channel++) {
+                  const outputData = outputBuffer.getChannelData(channel);
+                  const newData = newBuffer.getChannelData(channel);
+                  const originalData = originalBuffer.getChannelData(channel);
+
+                  // Apply crossfade at the start
+                  for (let i = 0; i < crossfadeSamples; i++) {
+                    const fadeIn = i / crossfadeSamples;
+                    const fadeOut = 1 - fadeIn;
+                    const newSample = newData[i] ?? 0;
+                    const originalSample = originalData[startSample + i] ?? 0;
+                    outputData[startSample + i] = newSample * fadeIn + originalSample * fadeOut;
+                  }
+
+                  // Copy the middle section
+                  for (let i = crossfadeSamples; i < segmentLength - crossfadeSamples; i++) {
+                    outputData[startSample + i] = newData[i] ?? 0;
+                  }
+
+                  // Apply crossfade at the end
+                  for (let i = 0; i < crossfadeSamples; i++) {
+                    const fadeIn = i / crossfadeSamples;
+                    const fadeOut = 1 - fadeIn;
+                    const endIndex = startSample + segmentLength - crossfadeSamples + i;
+                    const newIndex = segmentLength - crossfadeSamples + i;
+                    const newSample = newData[newIndex] ?? 0;
+                    const originalSample = originalData[endIndex] ?? 0;
+                    outputData[endIndex] = newSample * fadeOut + originalSample * fadeIn;
+                  }
+                }
+
+                // Convert the buffer to a blob and create a new URL
+                const wavBlob = await new Promise<Blob>((resolve, reject) => {
+                  const offlineContext = new OfflineAudioContext(
+                    outputBuffer.numberOfChannels,
+                    outputBuffer.length,
+                    outputBuffer.sampleRate
+                  );
+                  const source = offlineContext.createBufferSource();
+                  source.buffer = outputBuffer;
+                  source.connect(offlineContext.destination);
+                  source.start();
+                  offlineContext.startRendering()
+                    .then((renderedBuffer) => {
+                      const wav = audioBufferToWav(renderedBuffer);
+                      resolve(new Blob([wav], { type: 'audio/wav' }));
+                    })
+                    .catch(error => {
+                      console.error("Error rendering audio:", error);
+                      reject(error instanceof Error ? error : new Error(String(error)));
+                    });
+                });
+
+                const newAudioUrl = URL.createObjectURL(wavBlob);
+
+                // Update the waveform with the new audio
+                await wavesurferRef.current.load(newAudioUrl);
+                
+                // Clean up
+                void audioContext.close();
+                URL.revokeObjectURL(audioUrl);
+                setIsPolling(false);
+                setCurrentPredictionId(null);
+
+                // Update edit history with new audio URL
+                setEditHistory(prev => prev.map(item => 
+                  item.predictionId === currentPredictionId
+                    ? { ...item, newAudioUrl: newAudioUrl, status: 'completed' }
+                    : item
+                ));
+              } catch (error) {
+                console.error("Error processing audio:", error);
+                void audioContext.close();
+                throw error instanceof Error ? error : new Error(String(error));
+              }
+            }
+          } else {
+            // Otherwise it's a JSON status update
+            const data = await response.json() as ReplicateResponse;
+            console.log("Replicate API response:", data);
+            
+            // Update edit history status
+            setEditHistory(prev => prev.map(item => 
+              item.predictionId === currentPredictionId
+                ? { 
+                    ...item, 
+                    status: data.status === "succeeded" ? "completed" : 
+                           data.status === "failed" ? "failed" : "processing"
+                  }
+                : item
+            ));
+            
+            if (data.status === "failed") {
+              // Log detailed error information
+              console.error("Prediction failed with details:", {
+                status: data.status,
+                error: data.error,
+                logs: data.logs,
+                output: data.output
+              });
+              
+              // Update edit history to show failure with error message
+              setEditHistory(prev => prev.map(item => 
+                item.predictionId === currentPredictionId
+                  ? { 
+                      ...item, 
+                      status: "failed",
+                      error: data.error ?? "Unknown error"
+                    }
+                  : item
+              ));
+              
+              setIsPolling(false);
+              setCurrentPredictionId(null);
+            }
+          }
+        } catch (error) {
+          console.error("Error polling prediction:", error);
+          // Update edit history to show failure
+          setEditHistory(prev => prev.map(item => 
+            item.predictionId === currentPredictionId
+              ? { 
+                  ...item, 
+                  status: "failed",
+                  error: error instanceof Error ? error.message : "Unknown error"
+                }
+              : item
+          ));
+          setIsPolling(false);
+          setCurrentPredictionId(null);
+        }
+      })();
+    }, 1000);
+
+    return () => clearInterval(pollInterval);
+  }, [currentPredictionId, isPolling, selectedRegion, searchParams]);
 
   if (!audioUrl) {
     return (
@@ -679,8 +1053,29 @@ export default function EditorPage() {
                   {editHistory.length > 0 ? (
                     <ul className="space-y-1">
                       {editHistory.map((item, index) => (
-                        <li key={index} className="text-xs text-gray-300 border-l-2 border-[var(--neptune-violet-500)] pl-2">
-                          <span className="text-[var(--neptune-purple-400)]">{item.timestamp}</span>: {item.prompt}
+                        <li key={index} className="text-xs text-gray-300 border-l-2 border-[var(--neptune-violet-500)] pl-2 flex items-center justify-between">
+                          <div>
+                            <span className="text-[var(--neptune-purple-400)]">{item.timestamp}</span>: {item.prompt}
+                            {item.status === 'processing' && (
+                              <span className="ml-2 text-[var(--neptune-purple-400)]">
+                                <Loader2 className="h-3 w-3 animate-spin inline" /> Processing...
+                              </span>
+                            )}
+                            {item.status === 'failed' && (
+                              <span className="ml-2 text-red-400">Failed</span>
+                            )}
+                          </div>
+                          {item.status === 'completed' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2 text-[var(--neptune-purple-400)] hover:text-[var(--neptune-purple-300)]"
+                              onClick={() => handleRevert(item)}
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Revert
+                            </Button>
+                          )}
                         </li>
                       ))}
                     </ul>

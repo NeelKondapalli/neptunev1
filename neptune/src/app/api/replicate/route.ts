@@ -42,6 +42,21 @@ interface TmpFilesResponse {
   };
 }
 
+interface AutotexAnalysis {
+  file_id: string;
+  timeline: Array<{
+    timestamp: number;
+    event: string;
+    details?: {
+      notes?: string[];
+      energy_level?: number;
+      additional_info?: Record<string, string | number | boolean>;
+    };
+  }>;
+  raw_analysis: string;
+  llm_description: string;
+}
+
 export async function POST(request: Request) {
   try {
     const { title, description, fileUrl, length } = await request.json() as GenerationRequest;
@@ -55,13 +70,55 @@ export async function POST(request: Request) {
     const promptTemplate = fileUrl ? prompts[1].starter : prompts[0].starter;
     console.log("Using prompt template type:", fileUrl ? "reference" : "oneshot");
 
+    let audioAnalysis: AutotexAnalysis | null = null;
+    if (fileUrl) {
+      try {
+        // Extract IPFS hash from the URL
+        const ipfsHash = fileUrl.split('/').pop()?.split('.')[0];
+        if (!ipfsHash) {
+          throw new Error("Invalid IPFS URL format");
+        }
+
+        console.log("Making Autotex API call with IPFS hash:", ipfsHash);
+        
+        // Call Autotex API for audio analysis
+        const autotexResponse = await fetch('https://autotex-957567445807.us-central1.run.app/analyze/ipfs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ 
+            ipfs_hash: ipfsHash 
+          })
+        });
+
+        if (!autotexResponse.ok) {
+          const errorText = await autotexResponse.text();
+          console.error("Autotex API error details:", {
+            status: autotexResponse.status,
+            statusText: autotexResponse.statusText,
+            errorText,
+            url: 'https://autotex-957567445807.us-central1.run.app/analyze/ipfs',
+            ipfsHash
+          });
+          throw new Error(`Autotex API error: ${autotexResponse.status} - ${errorText}`);
+        }
+
+        audioAnalysis = await autotexResponse.json() as AutotexAnalysis;
+        console.log("Autotex analysis result:", JSON.stringify(audioAnalysis, null, 2));
+      } catch (error) {
+        console.error("Error getting audio analysis:", error);
+        // Continue without analysis if it fails
+      }
+    }
+
     console.log("Generating refined prompt with Claude...");
     const refinedPrompt = await anthropic.messages.create({
       model: "claude-3-7-sonnet-20250219",
       max_tokens: 1024,
       messages: [{ 
         role: "user", 
-        content: `${promptTemplate}\n\nHere is the music description: ${description ?? title ?? "A short rap beat"}. The song should be ${length} seconds long.` 
+        content: `${promptTemplate}\n\nHere is the music description: ${description ?? title ?? "A short rap beat"}. The song should be ${length} seconds long.${audioAnalysis ? `\n\nAudio Analysis:\n${JSON.stringify(audioAnalysis, null, 2)}` : ''}` 
       }],
     });
     console.log("Refined prompt generated:", refinedPrompt.content);
@@ -71,27 +128,6 @@ export async function POST(request: Request) {
       throw new Error("Invalid response format from Claude");
     }
 
-    let inputAudioBuffer: Buffer | undefined;
-    // if (fileUrl) {
-    //   try {
-    //     const audioFile = JSON.parse(file) as AudioFile;
-    //     console.log("Parsed audio file:", { name: audioFile.name, type: audioFile.type });
-        
-    //     const base64Data = audioFile.url.split(',')[1];
-    //     if (!base64Data) {
-    //       throw new Error("Invalid audio data format - no base64 data found");
-    //     }
-    //     console.log("Base64 data length:", base64Data.length);
-        
-    //     inputAudioBuffer = Buffer.from(base64Data, 'base64');
-    //     console.log("Buffer size:", inputAudioBuffer.length);
-    //   } catch (error) {
-    //     console.error("Error processing audio file:", error);
-    //     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    //     throw new Error(`Failed to process audio file: ${errorMessage}`);
-    //   }
-    // }
-
     const input = {
       prompt: firstContent.text,
       duration: length,
@@ -99,10 +135,17 @@ export async function POST(request: Request) {
       ...(fileUrl && {
         input_audio: fileUrl,
         continuation: !(firstContent.text.toLowerCase().includes("remix") || firstContent.text.toLowerCase().includes("variation") || firstContent.text.toLowerCase().includes("reinterpret"))
+      }),
+      ...(audioAnalysis && {
+        audio_analysis: audioAnalysis
       })
     }
 
-    console.log("Replicate API input:", { ...input, input_audio: fileUrl ? "File URL present" : undefined });
+    console.log("Replicate API input:", { 
+      ...input, 
+      input_audio: fileUrl ? "File URL present" : undefined,
+      audio_analysis: audioAnalysis ? "Analysis present" : undefined 
+    });
 
     try {
       const prediction = await replicate.predictions.create({
