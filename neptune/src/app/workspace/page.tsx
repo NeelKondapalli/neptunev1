@@ -287,7 +287,7 @@ export default function WorkspacePage() {
               <div className="flex justify-center gap-4">
                 <Button
                   onClick={handlePlayPause}
-                  disabled={!isLoaded || (videoUrl && !isVideoLoaded)}
+                  disabled={!isLoaded}
                   className="bg-gradient-to-r from-[var(--neptune-violet-500)] to-[var(--neptune-purple-500)] hover:from-[var(--neptune-violet-400)] hover:to-[var(--neptune-purple-400)] disabled:opacity-50"
                   size="lg"
                 >
@@ -300,7 +300,7 @@ export default function WorkspacePage() {
 
                 <Button
                   onClick={handleRestart}
-                  disabled={!isLoaded || (videoUrl && !isVideoLoaded)}
+                  disabled={!isLoaded}
                   variant="outline"
                   className="bg-[var(--neptune-violet-700)]/20 border-[var(--neptune-violet-500)] hover:bg-[var(--neptune-violet-700)]/30"
                   size="lg"
@@ -314,7 +314,9 @@ export default function WorkspacePage() {
                 <Button
                   variant="outline"
                   className="bg-[var(--neptune-violet-700)]/20 border-[var(--neptune-violet-500)] hover:bg-[var(--neptune-violet-700)]/30"
+                  disabled={!isLoaded}
                   onClick={() => {
+                    if (!audioUrl) return;
                     const a = document.createElement('a')
                     a.href = decodeURIComponent(audioUrl)
                     a.download = 'generated-melody.wav'

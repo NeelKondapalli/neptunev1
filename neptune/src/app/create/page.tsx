@@ -261,30 +261,37 @@ export default function GeneratePage() {
     try {
       // Only try to upload files if we have a client
       if (file && client) {
-        const cid = await client.uploadFile(file);
-        
-        if (!cid) {
-          throw new Error("Failed to get CID after upload")
+        console.log("Uploading reference audio to Web3.Storage...")
+        try {
+          const cid = await client.uploadFile(file);
+          if (!cid) {
+            throw new Error("Failed to get CID after audio upload")
+          }
+          fileURL = `https://${cid}.ipfs.w3s.link`;
+          console.log("Reference audio uploaded successfully:", fileURL);
+        } catch (error) {
+          console.error("Failed to upload reference audio:", error);
+          // Decide if you want to block generation or proceed without reference
+          // setError("Failed to upload reference audio");
+          // setIsGenerating(false);
+          // return;
+          console.warn("Proceeding without uploaded reference audio.")
         }
-        
-        fileURL = `https://${cid}.ipfs.w3s.link`;
-        console.log("File uploaded successfully:", fileURL);
       } else if (file) {
-        console.warn("Web3.Storage client not initialized, skipping file upload");
+        console.warn("Web3.Storage client not initialized or no file, skipping reference audio upload");
       }
 
       // Upload video to Web3.Storage if present
+      let persistentVideoUrl: string | null = null; // Use a separate variable for the URL to pass
       if (videoFile && client) {
         console.log("Uploading video to Web3.Storage...");
         try {
           const videoCid = await client.uploadFile(videoFile);
-          
           if (!videoCid) {
             throw new Error("Failed to get CID for video upload")
           }
-          
-          videoFileURL = `https://${videoCid}.ipfs.w3s.link`;
-          console.log("Video uploaded successfully:", videoFileURL);
+          persistentVideoUrl = `https://${videoCid}.ipfs.w3s.link`; // Store the persistent URL
+          console.log("Video uploaded successfully:", persistentVideoUrl);
         } catch (error) {
           console.error("Failed to upload video:", error);
           setError("Failed to upload video");
@@ -292,21 +299,24 @@ export default function GeneratePage() {
           return;
         }
       } else if (videoFile) {
-        // If we have a video but no client, use the local video URL
-        videoFileURL = videoUrl;
-        console.log("Using local video URL:", videoFileURL);
+        // If we have a video but no client or upload failed, DO NOT set persistentVideoUrl
+        console.warn("Web3.Storage client not initialized or upload failed, skipping video upload.");
+        // persistentVideoUrl remains null
       }
 
+      // This check might be redundant now based on error handling above, but kept for safety
       if (file && !fileURL) {
-        setError("Failed to upload reference audio")
-        setIsGenerating(false)
-        return
+        console.warn("Reference audio was provided but failed to upload. Proceeding without it.")
+        // setError("Failed to upload reference audio")
+        // setIsGenerating(false)
+        // return
       }
 
       // Calculate duration - ensure it's an integer
       const duration = videoFile && videoDuration ? Math.ceil(videoDuration) : Math.ceil(length)
 
       // Generate audio
+      console.log("Sending request to /api/replicate...")
       const response = await fetch('/api/replicate', {
         method: 'POST',
         headers: {
@@ -315,22 +325,35 @@ export default function GeneratePage() {
         body: JSON.stringify({
           title,
           description,
-          fileUrl: fileURL,
+          fileUrl: fileURL, // Pass the potentially null audio URL
           length: duration,
         }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to generate audio')
+        const errorData = await response.json().catch(() => ({})) // Attempt to get error details
+        throw new Error(errorData.error || 'Failed to generate audio')
       }
 
       const data = await response.json()
       console.log('Generation response:', data)
 
-      // Redirect to workspace with both audio and video URLs if available
-      const workspaceUrl = `/workspace?predictionId=${data.predictionId}${videoFileURL ? `&video=${encodeURIComponent(videoFileURL)}` : ''}`
-      console.log("Redirecting to:", workspaceUrl);
-      router.push(workspaceUrl)
+      // Create a safe URL for redirection
+      const searchParams = new URLSearchParams()
+      searchParams.set('predictionId', data.predictionId)
+      
+      // ONLY add the video parameter if we have a persistent URL
+      if (persistentVideoUrl) {
+        const encodedVideoUrl = encodeURIComponent(persistentVideoUrl)
+        searchParams.set('video', encodedVideoUrl)
+      }
+
+      // Use a proper URL object to construct the path
+      const workspaceUrl = `/workspace?${searchParams.toString()}`
+      console.log("Redirecting to:", workspaceUrl)
+      
+      // Use replace instead of push to prevent back button issues
+      router.replace(workspaceUrl)
     } catch (error) {
       console.error('Error during generation:', error)
       setError(error instanceof Error ? error.message : 'Failed to generate audio')
