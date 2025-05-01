@@ -8,10 +8,13 @@ import { join, dirname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs/promises';
 
-
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN!,
 })
+
+// Add logging to check token
+console.log("Replicate API token present:", !!process.env.REPLICATE_API_TOKEN);
+console.log("Replicate API token length:", process.env.REPLICATE_API_TOKEN?.length);
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
@@ -108,7 +111,7 @@ export async function POST(request: Request) {
         console.log("Autotex analysis result:", JSON.stringify(audioAnalysis, null, 2));
       } catch (error) {
         console.error("Error getting audio analysis:", error);
-        // Continue without analysis if it fails
+        throw error; // Re-throw to maintain original error handling
       }
     }
 
@@ -153,7 +156,6 @@ export async function POST(request: Request) {
         model: "meta/musicgen",
         input: input,
       });
-
 
       console.log("Replicate prediction response:", prediction);
 
@@ -202,14 +204,12 @@ export async function GET(request: Request) {
       const url = Array.isArray(output) ? output[0] : output;
       
       if (url) {
-
         const audioRes = await fetch(url);
         if (!audioRes.ok) {
           throw new Error(`Failed to fetch audio: ${audioRes.status}`);
         }
         const arrayBuffer = await audioRes.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
-
 
         return new NextResponse(buffer, {
           status: 200,
