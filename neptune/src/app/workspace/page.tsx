@@ -6,22 +6,24 @@ import WaveSurfer from "wavesurfer.js"
 import { Button } from "@/components/ui/button"
 import { ArrowLeft, Play, Pause, RotateCcw, Loader2 } from "lucide-react"
 import { usePredictionStatus } from "./usePredictionStatus"
-
-interface WaveSurferError {
-  name: string;
-  [key: string]: unknown;
-}
+import { WaveSurferError } from "wavesurfer.js"
 
 export default function WorkspacePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const audioParam = searchParams.get("audio")
+  const videoParam = searchParams.get("video")
   const predictionId = searchParams.get("predictionId")
   const [audioUrl, setAudioUrl] = useState<string | null>(audioParam)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const waveformRef = useRef<HTMLDivElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const wavesurferRef = useRef<WaveSurfer | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
+  const [videoDuration, setVideoDuration] = useState<number | null>(null)
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false)
+  const [videoError, setVideoError] = useState<string | null>(null)
 
   // Use our polling hook if we have a prediction ID
   const predictionState = usePredictionStatus(predictionId)
@@ -33,9 +35,56 @@ export default function WorkspacePage() {
     }
   }, [predictionState.audioUrl])
 
+  // Set video URL if provided
+  useEffect(() => {
+    if (videoParam) {
+      try {
+        const decodedUrl = decodeURIComponent(videoParam)
+        console.log("Setting video URL:", decodedUrl)
+        setVideoUrl(decodedUrl)
+      } catch (error) {
+        console.error("Failed to decode video URL:", error)
+        setVideoError("Failed to load video")
+      }
+    }
+  }, [videoParam])
+
+  // Handle video loading
+  useEffect(() => {
+    if (videoRef.current && videoUrl) {
+      console.log("Setting up video element...")
+      
+      const handleLoadedMetadata = () => {
+        console.log("Video metadata loaded")
+        setVideoDuration(videoRef.current?.duration ?? null)
+        setIsVideoLoaded(true)
+        setVideoError(null)
+      }
+
+      const handleError = (e: Event) => {
+        console.error("Video loading error:", e)
+        setVideoError("Failed to load video")
+        setIsVideoLoaded(false)
+      }
+
+      videoRef.current.addEventListener('loadedmetadata', handleLoadedMetadata)
+      videoRef.current.addEventListener('error', handleError)
+
+      // Try loading the video
+      videoRef.current.src = videoUrl
+      videoRef.current.load()
+
+      return () => {
+        videoRef.current?.removeEventListener('loadedmetadata', handleLoadedMetadata)
+        videoRef.current?.removeEventListener('error', handleError)
+      }
+    }
+  }, [videoUrl])
+
   useEffect(() => {
     if (!audioUrl || !waveformRef.current) return
 
+    console.log("Initializing WaveSurfer...")
     // Initialize WaveSurfer
     const wavesurfer = WaveSurfer.create({
       container: waveformRef.current,
@@ -57,6 +106,7 @@ export default function WorkspacePage() {
     wavesurferRef.current = wavesurfer
 
     // Load audio file
+    console.log("Loading audio:", audioUrl)
     wavesurfer.load(decodeURIComponent(audioUrl))
     .catch((err: WaveSurferError) => {
         if (err.name !== "AbortError") {
@@ -66,30 +116,84 @@ export default function WorkspacePage() {
 
     // Event handlers
     wavesurfer.on('ready', () => {
+      console.log("WaveSurfer ready")
       setIsLoaded(true)
       wavesurferRef.current = wavesurfer
+      
+      // If video is present, sync its duration with audio
+      if (videoRef.current && isVideoLoaded) {
+        videoRef.current.currentTime = 0
+      }
     })
 
-    wavesurfer.on('play', () => setIsPlaying(true))
-    wavesurfer.on('pause', () => setIsPlaying(false))
-    wavesurfer.on('finish', () => setIsPlaying(false))
+    wavesurfer.on('play', () => {
+      console.log("WaveSurfer playing")
+      setIsPlaying(true)
+      if (videoRef.current) {
+        videoRef.current.play()
+      }
+    })
+
+    wavesurfer.on('pause', () => {
+      console.log("WaveSurfer paused")
+      setIsPlaying(false)
+      if (videoRef.current) {
+        videoRef.current.pause()
+      }
+    })
+
+    wavesurfer.on('finish', () => {
+      console.log("WaveSurfer finished")
+      setIsPlaying(false)
+      if (videoRef.current) {
+        videoRef.current.pause()
+        videoRef.current.currentTime = 0
+      }
+    })
+
+    // Sync video with audio
+    if (videoRef.current) {
+      videoRef.current.addEventListener('play', () => {
+        console.log("Video playing")
+        if (wavesurferRef.current && !wavesurferRef.current.isPlaying()) {
+          wavesurferRef.current.play()
+        }
+      })
+      videoRef.current.addEventListener('pause', () => {
+        console.log("Video paused")
+        if (wavesurferRef.current && wavesurferRef.current.isPlaying()) {
+          wavesurferRef.current.pause()
+        }
+      })
+      videoRef.current.addEventListener('seeked', () => {
+        console.log("Video seeked")
+        if (wavesurferRef.current) {
+          wavesurferRef.current.setTime(videoRef.current?.currentTime ?? 0)
+        }
+      })
+    }
 
     // Cleanup function
     return () => {
+      console.log("Cleaning up WaveSurfer")
       wavesurfer.destroy()
       wavesurferRef.current = null
-        
-      }
-  }, [audioUrl])
+    }
+  }, [audioUrl, videoUrl, isVideoLoaded])
 
   const handlePlayPause = () => {
+    console.log("Play/Pause clicked")
     if (!wavesurferRef.current) return
     void wavesurferRef.current.playPause()
   }
 
   const handleRestart = () => {
+    console.log("Restart clicked")
     if (!wavesurferRef.current) return
     wavesurferRef.current.stop()
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0
+    }
     void wavesurferRef.current.play()
   }
 
@@ -155,6 +259,24 @@ export default function WorkspacePage() {
 
           {audioUrl && (
             <div className="bg-[var(--neptune-violet-700)]/20 border border-[var(--neptune-violet-500)] rounded-xl p-8 space-y-8">
+              {/* Video container */}
+              {videoUrl && (
+                <div className="w-full aspect-video rounded-lg overflow-hidden bg-[var(--neptune-violet-700)]/30">
+                  {videoError ? (
+                    <div className="flex items-center justify-center h-full text-red-400">
+                      {videoError}
+                    </div>
+                  ) : (
+                    <video
+                      ref={videoRef}
+                      className="w-full h-full object-contain"
+                      playsInline
+                      muted
+                    />
+                  )}
+                </div>
+              )}
+
               {/* Waveform container */}
               <div 
                 ref={waveformRef} 
@@ -192,7 +314,9 @@ export default function WorkspacePage() {
                 <Button
                   variant="outline"
                   className="bg-[var(--neptune-violet-700)]/20 border-[var(--neptune-violet-500)] hover:bg-[var(--neptune-violet-700)]/30"
+                  disabled={!isLoaded}
                   onClick={() => {
+                    if (!audioUrl) return;
                     const a = document.createElement('a')
                     a.href = decodeURIComponent(audioUrl)
                     a.download = 'generated-melody.wav'
@@ -206,7 +330,7 @@ export default function WorkspacePage() {
                   className="bg-gradient-to-r from-[var(--neptune-violet-500)] to-[var(--neptune-purple-500)] hover:from-[var(--neptune-violet-400)] hover:to-[var(--neptune-purple-400)]"
                   onClick={() => {
                     if (audioUrl) {
-                      router.push(`/workspace/editor?audio=${encodeURIComponent(audioUrl)}`)
+                      router.push(`/workspace/editor?audio=${encodeURIComponent(audioUrl)}${videoUrl ? `&video=${encodeURIComponent(videoUrl)}` : ''}`)
                     }
                   }}
                   disabled={!isLoaded}

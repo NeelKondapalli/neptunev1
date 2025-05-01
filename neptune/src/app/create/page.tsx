@@ -27,25 +27,36 @@ export default function GeneratePage() {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [file, setFile] = useState<File | null>(null)
+  const [videoFile, setVideoFile] = useState<File | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
+  const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [length, setLength] = useState(15)
   const [client, setClient] = useState<any>(null)
+  const [videoDuration, setVideoDuration] = useState<number | null>(null)
   const mediaRecorder = useRef<MediaRecorder | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoInputRef = useRef<HTMLInputElement>(null)
+  const videoPreviewRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     const initClient = async () => {
       try {
-        if (!process.env.NEXT_PUBLIC_KEY) {
-          throw new Error("KEY is not set")
+        // Check if we're in a test environment
+        if (process.env.NEXT_PUBLIC_ENVIRONMENT === "test") {
+          console.log("Running in test environment, skipping Web3.Storage initialization");
+          return;
         }
-        if (!process.env.NEXT_PUBLIC_PROOF) {
-          throw new Error("PROOF is not set")
+
+        // Only initialize Web3.Storage if we have the required environment variables
+        if (!process.env.NEXT_PUBLIC_KEY || !process.env.NEXT_PUBLIC_PROOF) {
+          console.warn("Web3.Storage environment variables not set. File uploads will be disabled.");
+          return;
         }
+
         const principal = Signer.parse(process.env.NEXT_PUBLIC_KEY)
         const store = new StoreMemory()
         const client = await Client.create({ principal, store })
@@ -56,11 +67,24 @@ export default function GeneratePage() {
         setClient(client)
       } catch (err) {
         console.error('Failed to initialize Web3.Storage client:', err);
-        setError('Failed to initialize storage client');
+        // Don't set error state, just log it
       }
     };
     initClient();
   }, []);
+
+  // Handle video duration
+  useEffect(() => {
+    if (videoPreviewRef.current) {
+      const handleLoadedMetadata = () => {
+        setVideoDuration(videoPreviewRef.current?.duration ?? null)
+      }
+      videoPreviewRef.current.addEventListener('loadedmetadata', handleLoadedMetadata)
+      return () => {
+        videoPreviewRef.current?.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      }
+    }
+  }, [videoUrl])
 
   // Handle file upload
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -90,7 +114,34 @@ export default function GeneratePage() {
     reader.readAsDataURL(file)
   }
 
-  
+  // Handle video upload
+  const handleVideoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    console.log("Video file selected:", { name: file.name, type: file.type, size: file.size })
+
+    if (!file.type.includes('video/')) {
+      setError("Please upload a video file")
+      return
+    }
+    setVideoFile(file)
+    console.log("Starting video upload processing...")
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const result = e.target?.result
+      if (typeof result === 'string') {
+        console.log("Video processed successfully, setting video URL")
+        setVideoUrl(result)
+      }
+    }
+    reader.onerror = (error) => {
+      console.error("Error reading video file:", error)
+      setError("Failed to process video file")
+    }
+    reader.readAsDataURL(file)
+  }
+
   const startRecording = async () => {
     try {
       console.log("Requesting microphone access...")
@@ -173,6 +224,19 @@ export default function GeneratePage() {
     console.log("Audio cleared")
   }
 
+  const clearVideo = () => {
+    if (videoUrl) {
+      console.log("Clearing video URL")
+      URL.revokeObjectURL(videoUrl)
+    }
+    setVideoUrl(null)
+    setVideoFile(null)
+    if (videoInputRef.current) {
+      videoInputRef.current.value = ''
+    }
+    console.log("Video cleared")
+  }
+
   const handleGenerate = async () => {
     if (!title.trim()) {
       setError("Title is required")
@@ -188,74 +252,111 @@ export default function GeneratePage() {
       return
     }
 
-    if (!client) {
-      setError("Storage client not initialized")
-      return
-    }
-
     setError(null)
     setIsGenerating(true)
 
     let fileURL = null
+    let videoFileURL = null
 
     try {
-      if (file) {
-        const cid = await client.uploadFile(file);
-        
-        if (!cid) {
-          throw new Error("Failed to get CID after upload")
+      // Only try to upload files if we have a client
+      if (file && client) {
+        console.log("Uploading reference audio to Web3.Storage...")
+        try {
+          const cid = await client.uploadFile(file);
+          if (!cid) {
+            throw new Error("Failed to get CID after audio upload")
+          }
+          fileURL = `https://${cid}.ipfs.w3s.link`;
+          console.log("Reference audio uploaded successfully:", fileURL);
+        } catch (error) {
+          console.error("Failed to upload reference audio:", error);
+          // Decide if you want to block generation or proceed without reference
+          // setError("Failed to upload reference audio");
+          // setIsGenerating(false);
+          // return;
+          console.warn("Proceeding without uploaded reference audio.")
         }
-        
-        fileURL = `https://${cid}.ipfs.w3s.link`;
-        console.log("File uploaded successfully:", fileURL);
+      } else if (file) {
+        console.warn("Web3.Storage client not initialized or no file, skipping reference audio upload");
       }
 
+      // Upload video to Web3.Storage if present
+      let persistentVideoUrl: string | null = null; // Use a separate variable for the URL to pass
+      if (videoFile && client) {
+        console.log("Uploading video to Web3.Storage...");
+        try {
+          const videoCid = await client.uploadFile(videoFile);
+          if (!videoCid) {
+            throw new Error("Failed to get CID for video upload")
+          }
+          persistentVideoUrl = `https://${videoCid}.ipfs.w3s.link`; // Store the persistent URL
+          console.log("Video uploaded successfully:", persistentVideoUrl);
+        } catch (error) {
+          console.error("Failed to upload video:", error);
+          setError("Failed to upload video");
+          setIsGenerating(false);
+          return;
+        }
+      } else if (videoFile) {
+        // If we have a video but no client or upload failed, DO NOT set persistentVideoUrl
+        console.warn("Web3.Storage client not initialized or upload failed, skipping video upload.");
+        // persistentVideoUrl remains null
+      }
+
+      // This check might be redundant now based on error handling above, but kept for safety
       if (file && !fileURL) {
-        setError("Failed to upload file")
-        setIsGenerating(false)
-        return
+        console.warn("Reference audio was provided but failed to upload. Proceeding without it.")
+        // setError("Failed to upload reference audio")
+        // setIsGenerating(false)
+        // return
       }
 
-      let res
-      if (process.env.NEXT_PUBLIC_ENVIRONMENT === "test") {
-        res = await fetch("/api/test", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            title, 
-            description, 
-            fileUrl: fileURL,
-            length: length  
-          }),
-        })
-      } else {
-        res = await fetch("/api/replicate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            title, 
-            description, 
-            fileUrl: fileURL,
-            length: length  
-          }),
-        })
+      // Calculate duration - ensure it's an integer
+      const duration = videoFile && videoDuration ? Math.ceil(videoDuration) : Math.ceil(length)
+
+      // Generate audio
+      console.log("Sending request to /api/replicate...")
+      const response = await fetch('/api/replicate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          fileUrl: fileURL, // Pass the potentially null audio URL
+          length: duration,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})) // Attempt to get error details
+        throw new Error(errorData.error || 'Failed to generate audio')
       }
 
-      if (!res.ok) {
-        const errorData = await res.json() as { error?: string }
-        throw new Error(errorData.error ?? "Generation failed")
-      }
+      const data = await response.json()
+      console.log('Generation response:', data)
 
-      const data = await res.json() as PredictionResponse
+      // Create a safe URL for redirection
+      const searchParams = new URLSearchParams()
+      searchParams.set('predictionId', data.predictionId)
       
-      if (data.success && data.predictionId) {
-        router.push(`/workspace?predictionId=${data.predictionId}`)
-      } else {
-        throw new Error("No prediction ID returned")
+      // ONLY add the video parameter if we have a persistent URL
+      if (persistentVideoUrl) {
+        const encodedVideoUrl = encodeURIComponent(persistentVideoUrl)
+        searchParams.set('video', encodedVideoUrl)
       }
-    } catch (err) {
-      const error = err as Error
-      setError(error.message ?? "Generation failed")
+
+      // Use a proper URL object to construct the path
+      const workspaceUrl = `/workspace?${searchParams.toString()}`
+      console.log("Redirecting to:", workspaceUrl)
+      
+      // Use replace instead of push to prevent back button issues
+      router.replace(workspaceUrl)
+    } catch (error) {
+      console.error('Error during generation:', error)
+      setError(error instanceof Error ? error.message : 'Failed to generate audio')
       setIsGenerating(false)
     }
   }
@@ -350,6 +451,55 @@ export default function GeneratePage() {
                       </Button>
                     </div>
                     <audio controls src={audioUrl} className="w-full" />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Video Upload Section */}
+            <div>
+              <label className="block mb-2 text-gray-300">Reference Video (Optional)</label>
+              <p className="text-sm text-gray-400 mb-2">Upload a video to generate synchronized music</p>
+              <div className="space-y-4">
+                {!videoUrl && (
+                  <div className="flex gap-4">
+                    <Button
+                      onClick={() => videoInputRef.current?.click()}
+                      className="flex-1 bg-[var(--neptune-violet-600)] hover:bg-[var(--neptune-violet-500)] border-[var(--neptune-violet-400)]"
+                      variant="outline"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Upload Video
+                    </Button>
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoUpload}
+                      className="hidden"
+                    />
+                  </div>
+                )}
+
+                {videoUrl && (
+                  <div className="bg-[var(--neptune-violet-700)]/30 border border-[var(--neptune-violet-500)] rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-400">Reference Video</span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={clearVideo}
+                        className="hover:bg-[var(--neptune-violet-600)]/50"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <video 
+                      ref={videoPreviewRef}
+                      controls 
+                      src={videoUrl} 
+                      className="w-full"
+                    />
                   </div>
                 )}
               </div>
