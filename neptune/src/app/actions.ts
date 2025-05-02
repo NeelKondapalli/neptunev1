@@ -7,7 +7,7 @@ export async function signUpForWaitlist(email: string) {
     const { error } = await supabase
       .from('signups')
       .insert([
-        {email: email.toLowerCase()}
+        {email: email.toLowerCase(), approved: false}
       ])
 
     if (error) {

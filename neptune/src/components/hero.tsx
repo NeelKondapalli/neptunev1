@@ -242,11 +242,11 @@ export function Hero() {
   return (
     <section className="relative min-h-screen flex flex-col items-center justify-center px-4 overflow-hidden">
       <canvas ref={canvasRef} className="absolute inset-0 z-0" />
-      {/* <Link href="/create">
+      <Link href="/create">
         <Button className="absolute top-4 right-4 z-10 bg-neptune-button-gradient text-white font-medium hover:opacity-90 transition-all disabled:opacity-50">
           Create
         </Button>
-      </Link> */}
+      </Link>
 
       <div className="absolute inset-0 z-0 bg-neptune-gradient">
         <div className="neptune-glow top-1/4 -left-20 w-60 h-60" style={{ backgroundColor: "var(--neptune-violet-600)" }} />
