@@ -2,6 +2,14 @@
 
 [Neptune](https://www.useneptune.xyz/) is revolutionizing music creation by making it as effortless as writing text. Our platform combines cutting-edge AI technology with blockchain-verified ownership to democratize music production.
 
+## 🎥 Demo Videos
+
+Check out Neptune in action:
+
+1. [Music Generation Demo](https://www.youtube.com/watch?v=HzEEJJzjGtU) - See how Neptune transforms text into music
+2. [Audio Processing Pipeline](https://www.youtube.com/watch?v=ZsCSun0rFJ0) - Watch our advanced audio processing in action
+3. [Full Platform Overview](https://www.youtube.com/watch?v=7qGZ3mJmt9c) - Complete walkthrough of Neptune's features
+
 ## 🎵 Features
 
 ### Audio Generation Pipeline
