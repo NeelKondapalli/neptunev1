@@ -1,29 +1,79 @@
-# Create T3 App
+# Neptune
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+A modern web application built with the T3 Stack, featuring AI integration and advanced audio processing capabilities.
 
-## What's next? How do I make an app with this?
+## 🚀 Tech Stack
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+- **Framework**: [Next.js](https://nextjs.org) (App Router)
+- **Authentication**: [NextAuth.js](https://next-auth.js.org)
+- **Database**: [Supabase](https://supabase.com)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com) with [Radix UI](https://www.radix-ui.com)
+- **AI Integration**: [Anthropic](https://www.anthropic.com) and [Replicate](https://replicate.com)
+- **Storage**: [Web3.Storage](https://web3.storage)
+- **Audio Processing**: [Wavesurfer.js](https://wavesurfer.js.org)
+- **Form Handling**: [React Hook Form](https://react-hook-form.com) with [Zod](https://zod.dev)
+- **Type Safety**: [TypeScript](https://www.typescriptlang.org)
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+## 📦 Getting Started
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/yourusername/neptune.git
+   cd neptune
+   ```
 
-## Learn More
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+3. **Set up environment variables**
+   Create a `.env` file in the root directory with the following variables:
+   ```
+   # Supabase
+   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+   # AI Services
+   ANTHROPIC_API_KEY=your_anthropic_api_key
+   REPLICATE_API_TOKEN=your_replicate_api_token
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+   # Web3.Storage
+   WEB3_STORAGE_TOKEN=your_web3_storage_token
+   ```
 
-## How do I deploy this?
+4. **Run the development server**
+   ```bash
+   npm run dev
+   ```
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+5. **Open [http://localhost:3000](http://localhost:3000)** in your browser
+
+## 🛠️ Available Scripts
+
+- `npm run dev` - Start development server with Turbopack
+- `npm run build` - Build for production
+- `npm run start` - Start production server
+- `npm run lint` - Run ESLint
+- `npm run typecheck` - Run TypeScript compiler
+- `npm run format:check` - Check code formatting
+- `npm run format:write` - Format code
+
+## 📁 Project Structure
+
+```
+src/
+├── app/          # Next.js app router pages
+├── components/   # Reusable UI components
+├── lib/          # Utility functions and configurations
+├── styles/       # Global styles and Tailwind config
+└── env.js        # Environment variable validation
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
