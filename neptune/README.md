@@ -6,9 +6,9 @@
 
 Check out Neptune in action:
 
-1. [Music Generation Demo](https://www.youtube.com/watch?v=HzEEJJzjGtU) - See how Neptune transforms text into music
+1. [Music Generation Demo](https://www.youtube.com/watch?v=HzEEJJzjGtU) - See how Neptune transforms text and samples into music
 2. [Audio Processing Pipeline](https://www.youtube.com/watch?v=ZsCSun0rFJ0) - Watch our advanced audio processing in action
-3. [Full Platform Overview](https://www.youtube.com/watch?v=7qGZ3mJmt9c) - Complete walkthrough of Neptune's features
+3. [Editing Platform Overview](https://www.youtube.com/watch?v=7qGZ3mJmt9c) - Walkthrough of Neptune's AI-native audio editing studio
 
 ## 🎵 Features
 
